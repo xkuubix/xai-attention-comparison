@@ -14,9 +14,10 @@ if __name__ == "__main__":
     some_metadata = get_metadata(path)
     apply_exclusion_criteria(df_excel, some_metadata)
     df_excel = df_excel.iloc[:, :4]
+    df_excel = df_excel.rename(columns={'classification': 'Classification'})
 
-    df_excel['classificationMapped'] = df_excel['classification'].apply(map_classification)
-    df_excel = df_excel[df_excel['classificationMapped'] != 'Unknown']
+    df_excel['ClassificationMapped'] = df_excel['Classification'].apply(map_classification)
+    df_excel = df_excel[df_excel['ClassificationMapped'] != 'Unknown']
 
     id_view_lat = [item[:13] for item in annotation_files] # Extracting {ID}_{View}_{Laterality} from filenames
     all_annotations = []
@@ -57,6 +58,8 @@ if __name__ == "__main__":
         idx1, idx2 = subset.index
         df_full.loc[idx1, 'LeftRight'], df_full.loc[idx2, 'LeftRight'] = df_full.loc[idx2, 'LeftRight'], df_full.loc[idx1, 'LeftRight']
         df_full.loc[idx1, 'AnnotPath'], df_full.loc[idx2, 'AnnotPath'] = df_full.loc[idx2, 'AnnotPath'], df_full.loc[idx1, 'AnnotPath']
+    
+    df_full["ImagePath"] = df_full["ImagePath"].apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x)    
 
     df = generate_filled_masks(df_full,
                                output_dir='../masks',
