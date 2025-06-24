@@ -1,7 +1,13 @@
 from pydicom import dcmread
 import pandas as pd
 import os
-
+import numpy as np
+import json
+import pydicom
+import matplotlib.pyplot as plt
+from PIL import Image
+import os
+import cv2
 
 def read_metadata(file_path):
     return pd.read_csv(file_path)
@@ -101,10 +107,71 @@ def merge_dataframes(df_images, df_annotations, df_excel):
     )
 
     df_full = df_full.merge(
-        df_positive[['ID', 'LeftRight', 'Path']],
+        df_positive[['ID', 'LeftRight', 'AnnotPath']],
         on=['ID', 'LeftRight'],
         how='left'
     )
 
     df_full = df_full.dropna(subset=['ImagePath'])
     return df_full
+
+
+def generate_filled_masks(df,
+                          output_dir='output/masks',
+                          if_save=True,
+                          if_show=False,
+                          df_save_path='output/df_with_masks.pkl'):
+
+    # BINARY CASE - cancer vs. no cancer masks
+    
+    os.makedirs(output_dir, exist_ok=True)
+    mask_paths = []
+
+    for idx, row in df.iterrows():
+        print(f"Processing image {idx + 1}/{len(df)}")
+
+        patient_id = row['ID']
+        laterality = row.get('LeftRight', 'Unknown')
+        classification = row.get('classificationMapped', 'Unknown')
+        image_path = row.get('ImagePath')[0]
+        annotation_path = row.get('AnnotPath', None)
+
+        ds = pydicom.dcmread(image_path)
+        image_array = ds.pixel_array
+        height, width = image_array.shape
+        mask = np.zeros((height, width), dtype=np.bool)
+
+        if pd.notna(annotation_path):
+            with open(annotation_path, 'r') as f:
+                annotation_data = json.load(f)
+            for ann in annotation_data:
+                points = ann.get("cgPoints", [])
+                if not points:
+                    continue
+                polygon = np.array([[int(p["x"]), int(p["y"])] for p in points], dtype=np.int32)
+                polygon = polygon.reshape((-1, 1, 2))
+                cv2.fillPoly(mask, [polygon], color=1)
+
+        if if_save:
+            filename = f'{patient_id}_{laterality}_{classification}_mask.png'
+            save_path = os.path.join(output_dir, filename)
+            Image.fromarray(mask).save(save_path)
+            print(f"Saved mask to {save_path}")
+            mask_paths.append(save_path)
+        else:
+            mask_paths.append(None)
+
+        if if_show:
+            fig, ax = plt.subplots(figsize=(10, 8))
+            ax.imshow(image_array, cmap='gray')
+            ax.imshow(mask, alpha=0.4, cmap='Reds')
+            plt.title(f'ID: {patient_id} | dx: {classification} | {laterality}')
+            plt.axis('off')
+            plt.show()
+            plt.close(fig)
+
+    df['MaskPath'] = mask_paths
+    if if_save:
+        os.makedirs(os.path.dirname(df_save_path), exist_ok=True)
+        df.to_pickle(df_save_path)
+    return df
