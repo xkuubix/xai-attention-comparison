@@ -139,7 +139,7 @@ def generate_filled_masks(df,
         ds = pydicom.dcmread(image_path)
         image_array = ds.pixel_array
         height, width = image_array.shape
-        mask = np.zeros((height, width), dtype=np.bool)
+        mask = np.zeros((height, width), dtype=np.uint8)
 
         if pd.notna(annotation_path):
             with open(annotation_path, 'r') as f:
