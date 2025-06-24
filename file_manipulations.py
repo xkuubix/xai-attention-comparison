@@ -100,7 +100,7 @@ def merge_dataframes(df_images, df_annotations, df_excel):
         how='left'
     )
 
-    df_positive = df_full[df_full['classificationMapped'] == 'Positive'].merge(
+    df_positive = df_full[df_full['ClassificationMapped'] == 'Positive'].merge(
         df_annotations,
         on=['ID', 'LeftRight'],
         how='left'
@@ -132,8 +132,8 @@ def generate_filled_masks(df,
 
         patient_id = row['ID']
         laterality = row.get('LeftRight', 'Unknown')
-        classification = row.get('classificationMapped', 'Unknown')
-        image_path = row.get('ImagePath')[0]
+        classification = row.get('ClassificationMapped', 'Unknown')
+        image_path = row.get('ImagePath')
         annotation_path = row.get('AnnotPath', None)
 
         ds = pydicom.dcmread(image_path)
