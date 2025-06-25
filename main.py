@@ -39,12 +39,24 @@ if __name__ == "__main__":
     torch.use_deterministic_algorithms(True)
     torch.set_default_dtype(torch.float32)
 
-    model = MultiHeadGatedAttentionMIL(
-        backbone=config['model'],
-        feature_dropout=config['feature_dropout'],
-        attention_dropout=config['attention_dropout'],
-        shared_attention=config['shared_att']
-        )
+    if config['training_plan']['criterion'].lower() == 'bce':
+        model = GatedAttentionMIL(
+            backbone=config['model'],
+            feature_dropout=config['feature_dropout'],
+            attention_dropout=config['attention_dropout'],
+            config=config
+            )
+    elif config['training_plan']['criterion'].lower() == 'ce':
+        model = MultiHeadGatedAttentionMIL(
+            backbone=config['model'],
+            feature_dropout=config['feature_dropout'],
+            attention_dropout=config['attention_dropout'],
+            shared_attention=config['shared_att'],
+            config=config
+            )
+    if config["neptune"]:
+        run['model/architecture'] = str(model.__class__.__name__)
+    print(f"Model architecture: {str(model.__class__.__name__)}")
     model.apply(deactivate_batchnorm)
     model.to(device)
 
