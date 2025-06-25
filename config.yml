@@ -1,8 +1,8 @@
-neptune: False
+neptune: True
 seed: 42
 device: 'cuda'
 
-model_path: '/users/scratch1/jbuler/models'
+model_path: '/users/scratch1/jbuler/models-xai-eval'
 model: "r18"
 shared_att: False
 
@@ -18,12 +18,10 @@ data:
   root_path: '/users/project1/pt01190/TOMPEI-CMMD'
   metadata_path: '/users/project1/pt01190/TOMPEI-CMMD/df_with_masks.pkl'
   
-  # patch_size: 224
-  # bag_size_train: -1
-  # empty_threshold: 0.75
-  # bag_size_val_test: -1
-  # overlap_train: 0.5
-  # overlap_val_test: 0.75
+  patch_size: 128
+  overlap: 0.5
+  empty_threshold: 0.75
+  bag_size: -1
 
   # cv_folds: 5
   # fraction_test: 0.15
