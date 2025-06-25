@@ -33,7 +33,9 @@ class GatedAttentionMIL(nn.Module):
                 D=128,
                 K=1,
                 feature_dropout=0.1,
-                attention_dropout=0.1):
+                attention_dropout=0.1,
+                config=None
+                ):
 
         super().__init__()
         self.L = L  
@@ -70,10 +72,10 @@ class GatedAttentionMIL(nn.Module):
                                                   num_classes))
         self.feature_dropout = nn.Dropout(feature_dropout)
 
-        self.patcher = ImagePatcher(patch_size=128,
-                                    overlap=0.75,
-                                    empty_thresh=0.75,
-                                    bag_size=-1)
+        self.patcher = ImagePatcher(patch_size=config['data']['patch_size'] if config else 128,
+                                    overlap=config['data']['overlap'] if config else 0.,
+                                    empty_thresh=config['data']['empty_threshold'] if config else 0.75,
+                                    bag_size=config['data']['bag_size'] if config else -1)
         # torch.Size([3, 2294, 1914]) in CMMD
         self.patcher.get_tiles(2294, 1914)
         self.reconstruct_attention = False
@@ -177,7 +179,8 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             feature_dropout=0.1,
             attention_dropout=0.1,
             shared_attention=False,
-            neptune_run=None):
+            neptune_run=None,
+            config=None):
         
         super().__init__()
 
@@ -239,10 +242,10 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             nn.Dropout(attention_dropout) for _ in range(self.num_classes)
         ])
 
-        self.patcher = ImagePatcher(patch_size=128,
-                                    overlap=0.75,
-                                    empty_thresh=0.75,
-                                    bag_size=-1)
+        self.patcher = ImagePatcher(patch_size=config['data']['patch_size'] if config else 128,
+                                    overlap=config['data']['overlap'] if config else 0.,
+                                    empty_thresh=config['data']['empty_threshold'] if config else 0.75,
+                                    bag_size=config['data']['bag_size'] if config else -1)
         # torch.Size([3, 2294, 1914]) in CMMD
         self.patcher.get_tiles(2294, 1914)
         self.reconstruct_attention = False
