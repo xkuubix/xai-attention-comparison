@@ -62,15 +62,16 @@ def get_dataloaders(config):
         # To apply transforms on np.ndarray, first convert to PIL Image.
 
     train_transforms = T.Compose([
-        T.ToPILImage(),
-        T.RandomAdjustSharpness(0.05, p=0.25),
-        T.RandomAutocontrast(p=0.25),
-        T.RandomEqualize(p=0.25),
+        # T.ToPILImage(),
+        # T.RandomAdjustSharpness(0.05, p=0.25),
+        # T.RandomAutocontrast(p=0.25),
+        # T.RandomEqualize(p=0.25),
         T.ToTensor(),
-        T.RandomErasing(p=0.25, scale=(0.02, 0.12), ratio=(0.2, 2.2), value='random'),
+        # T.RandomErasing(p=0.25, scale=(0.02, 0.12), ratio=(0.2, 2.2), value='random'),
         ])
-    val_test_transforms = T.Compose([T.ToTensor(),
-                                     ])
+    val_test_transforms = T.Compose([
+        T.ToTensor(),
+        ])
     train_dataset = TompeiDataset(
         train_set,
         transform=train_transforms,
