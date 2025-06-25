@@ -75,7 +75,7 @@ class GatedAttentionMIL(nn.Module):
                                     empty_thresh=0.75,
                                     bag_size=-1)
         # torch.Size([3, 2294, 1914]) in CMMD
-        self.tiles = self.patcher.get_tiles(2294, 1914)
+        self.patcher.get_tiles(2294, 1914)
         self.reconstruct_attention = False
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -83,7 +83,7 @@ class GatedAttentionMIL(nn.Module):
         instances, instances_ids, _ = self.patcher.convert_img_to_bag(x.squeeze(0))
         instances = instances.unsqueeze(0)
         instances = self.norm_instances(instances)
-        instances.to(self.device)
+        instances = instances.to(self.device)
 
         bs, num_instances, ch, w, h = instances.shape
         instances = instances.view(bs*num_instances, ch, w, h)
@@ -115,7 +115,7 @@ class GatedAttentionMIL(nn.Module):
         instances, instances_ids, _ = self.patcher.convert_img_to_bag(x.squeeze(0))
         instances = instances.unsqueeze(0)
         instances = self.norm_instances(instances)
-        instances.to(self.device)
+        instances = instances.to(self.device)
 
         bs, num_instances, ch, w, h = instances.shape
         instances = instances.view(bs*num_instances, ch, w, h)
@@ -244,7 +244,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
                                     empty_thresh=0.75,
                                     bag_size=-1)
         # torch.Size([3, 2294, 1914]) in CMMD
-        self.tiles = self.patcher.get_tiles(2294, 1914)
+        self.patcher.get_tiles(2294, 1914)
         self.reconstruct_attention = False
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -253,7 +253,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         instances, instances_ids, _ = self.patcher.convert_img_to_bag(x.squeeze(0))
         instances = instances.unsqueeze(0)
         instances = self.norm_instances(instances)
-        instances.to(self.device)
+        instances = instances.to(self.device)
         bs, num_instances, ch, w, h = instances.shape
         instances = instances.view(bs*num_instances, ch, w, h)
         H = self.feature_extractor(instances)
@@ -306,7 +306,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         instances, instances_ids, _ = self.patcher.convert_img_to_bag(x.squeeze(0))
         instances = instances.unsqueeze(0)
         instances = self.norm_instances(instances)
-        instances.to(self.device)
+        instances = instances.to(self.device)
 
         bs, num_instances, ch, w, h = instances.shape
         instances = instances.view(bs*num_instances, ch, w, h)
