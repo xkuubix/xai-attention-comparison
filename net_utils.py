@@ -48,7 +48,8 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
     for batch_idx, batch in enumerate(dataloader):
         images, targets = batch['image'], batch['target']['label'].to(device)
         output, _ = model(images)
-        # output = torch.sigmoid(outputs.squeeze(0))
+        if str(model.__class__.__name__) == "GatedAttentionMIL":
+            output = torch.sigmoid(output[0].squeeze(0))
         loss = criterion(output, targets)
        
         running_loss += loss.item()
@@ -61,9 +62,10 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
             optimizer.step()
             optimizer.zero_grad()
 
-        running_loss += loss.item() * accumulation_steps
-        # preds = (output.view(-1) > 0.5).float()
-        preds = output.argmax(dim=1)
+        if str(model.__class__.__name__) == "GatedAttentionMIL":
+            preds = (output.view(-1) > 0.5).float()
+        elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL":
+            preds = output.argmax(dim=1)
         correct += (preds == targets).sum().item()
         total += targets.size(0)
 
@@ -92,11 +94,14 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
             output, _ = model(images)
-            # output = torch.sigmoid(outputs.squeeze(0))
+            if str(model.__class__.__name__) == "GatedAttentionMIL":
+                output = torch.sigmoid(output[0].squeeze(0))
             loss = criterion(output, targets)
             running_loss += loss.item()
-            # preds = (output.view(-1) > 0.5).float()
-            preds = output.argmax(dim=1)
+            if str(model.__class__.__name__) == "GatedAttentionMIL":
+                preds = (output.view(-1) > 0.5).float()
+            elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL":
+                preds = output.argmax(dim=1)
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             
