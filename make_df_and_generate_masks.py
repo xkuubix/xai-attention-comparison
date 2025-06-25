@@ -56,8 +56,7 @@ if __name__ == "__main__":
             continue
 
         idx1, idx2 = subset.index
-        df_full.loc[idx1, 'LeftRight'], df_full.loc[idx2, 'LeftRight'] = df_full.loc[idx2, 'LeftRight'], df_full.loc[idx1, 'LeftRight']
-        df_full.loc[idx1, 'AnnotPath'], df_full.loc[idx2, 'AnnotPath'] = df_full.loc[idx2, 'AnnotPath'], df_full.loc[idx1, 'AnnotPath']
+        df_full.loc[idx1, 'ImagePath'], df_full.loc[idx2, 'ImagePath'] = df_full.loc[idx2, 'ImagePath'], df_full.loc[idx1, 'ImagePath']
     
     df_full["ImagePath"] = df_full["ImagePath"].apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x)    
 
