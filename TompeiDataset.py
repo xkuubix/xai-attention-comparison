@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class TompeiDataset(Dataset):
-    def __init__(self, df, transform=None):
+    def __init__(self, df, transform=None, config=None):
         """
         Args:
             df (pd.DataFrame): DataFrame containing image metadata.
@@ -19,8 +19,10 @@ class TompeiDataset(Dataset):
             transform (callable, optional): Optional transform to be applied on a sample.
         """
         self.df = df
+        self.class_name = df['ClassificationMapped']
         self.transform = transform
         logger.info(f"Dataset initialized with {len(self.df)} samples.")
+        self.config = config
 
     def __len__(self):
         return len(self.df)
@@ -34,10 +36,15 @@ class TompeiDataset(Dataset):
         mask_name = os.path.join(self.df.iloc[idx]['MaskPath'])
         mask = Image.open(mask_name)
         label_str = self.df.iloc[idx]['ClassificationMapped']
-        label = 0. if label_str == 'Negative' else 1.
-        label = torch.tensor(label, dtype=torch.float32)
+        if self.config:
+            if self.config['training_plan']['criterion'].lower() == 'bce':
+                label = 0. if label_str == 'Negative' else 1.
+                label = torch.tensor(label, dtype=torch.float32)
+            elif self.config['training_plan']['criterion'].lower() == 'ce':
+                label = 0 if label_str == 'Negative' else 1
+                label = torch.tensor(label, dtype=torch.long)
 
-        metadata = self.df.iloc[idx]
+        metadata = self.df.iloc[idx].to_dict()
 
         if self.transform:
             # TODO add albumentation transformations
@@ -48,7 +55,10 @@ class TompeiDataset(Dataset):
             image = T.RandomHorizontalFlip(p=1.0)(image)
             mask = TF.hflip(mask)
 
+        mask = np.array(mask)
         return {"image": image,
-                "mask": mask,
-                "label": label,
+                "target": {
+                    "mask": mask,
+                    "label": label,
+                },
                 "metadata": metadata}
