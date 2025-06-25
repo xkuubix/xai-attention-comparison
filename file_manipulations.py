@@ -150,7 +150,7 @@ def generate_filled_masks(df,
                     continue
                 polygon = np.array([[int(p["x"]), int(p["y"])] for p in points], dtype=np.int32)
                 polygon = polygon.reshape((-1, 1, 2))
-                cv2.fillPoly(mask, [polygon], color=1)
+                cv2.fillPoly(mask, [polygon], color=255)
 
         if if_save:
             filename = f'{patient_id}_{laterality}_{classification}_mask.png'
