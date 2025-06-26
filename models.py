@@ -106,7 +106,7 @@ class GatedAttentionMIL(nn.Module):
         return Y, A
 
 
-    def mc_inference(self, x, n=30):
+    def mc_inference(self, x, N=30):
         self.eval()
         def enable_dropout(m):
             if isinstance(m, torch.nn.Dropout):
@@ -130,7 +130,7 @@ class GatedAttentionMIL(nn.Module):
         attention_weights = []
         
         with torch.no_grad():
-            for _ in range(n):
+            for _ in range(N):
                 H_dropout = self.feature_dropout(H)  # Apply dropout in each pass
 
                 A_V = self.attention_V(H_dropout)
