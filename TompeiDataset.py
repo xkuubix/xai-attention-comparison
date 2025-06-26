@@ -55,7 +55,7 @@ class TompeiDataset(Dataset):
             image = T.RandomHorizontalFlip(p=1.0)(image)
             mask = TF.hflip(mask)
 
-        mask = np.array(mask)
+        mask = np.array(mask, dtype=np.bool)
         return {"image": image,
                 "target": {
                     "mask": mask,
