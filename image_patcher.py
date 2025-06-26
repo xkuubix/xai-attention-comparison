@@ -41,6 +41,8 @@ class ImagePatcher:
         return tiles
 
     def convert_img_to_bag(self, image):
+        if isinstance(image, np.ndarray):
+            image =  torch.tensor(image, dtype=torch.float32)
         tiles = self.tiles
         hTile, wTile = tiles[0][2], tiles[0][3]
         c = image.shape[0]
