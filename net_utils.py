@@ -37,7 +37,7 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
 
 
-def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epoch, accumulation_steps=8, fold_idx=None):
+def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run=None, epoch=100, accumulation_steps=8, fold_idx=None):
     model.train()
     running_loss = 0.0
     correct = 0
@@ -84,7 +84,7 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
 
 
 
-def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=None):
+def validate(model, dataloader, criterion, device, neptune_run=None, epoch=100, fold_idx=None):
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -120,7 +120,7 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=
     return epoch_loss
 
 
-def test(model, dataloader, device, neptune_run, fold_idx=None):
+def test(model, dataloader, device, neptune_run=None, fold_idx=None):
     model.eval()
     correct = 0
     total = 0
@@ -130,10 +130,12 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
     with torch.no_grad():
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-            output, _, _ = model(images)
-            # output = torch.sigmoid(outputs.squeeze(0))
-            preds = output.argmax(dim=1)
-            # preds = (output.view(-1) > 0.5).float()
+            output, _ = model(images)
+            if str(model.__class__.__name__) == "GatedAttentionMIL":
+                output = torch.sigmoid(output[0].squeeze(0))
+                preds = (output.view(-1) > 0.5).float()
+            elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL":
+                preds = output.argmax(dim=1)
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             all_preds.extend(preds.cpu().numpy())
@@ -155,7 +157,7 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
     return test_acc, report
 
 
-def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
+def mc_test(model, dataloader, device, neptune_run=None, fold_idx=None, N=50):
     model.eval()
     correct = 0
     total = 0
@@ -164,14 +166,16 @@ def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
     
     with torch.no_grad():
         for batch in dataloader:
-            images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-            output, _, _ = model.mc_inference(input_tensor=images, N=N, device=device)
+            images, targets = batch['image'], batch['target']['label'].to(device)
+            output, _ = model.mc_inference(x=images, N=N)
             # output, _ = model(images, N=N)
-            output = torch.nn.functional.softmax(output, dim=-1)
-            mc_output_mean = output.mean(dim=0)
-            # output = torch.sigmoid(outputs.squeeze(0))
-            preds = mc_output_mean.argmax(dim=1)
-            # preds = (output.view(-1) > 0.5).float()
+            if str(model.__class__.__name__) == "GatedAttentionMIL":
+                output = torch.sigmoid(output.squeeze(0))
+                preds = (output.view(-1) > 0.5).float()
+            elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL": 
+                output = torch.nn.functional.softmax(output, dim=-1)
+                mc_output_mean = output.mean(dim=0)
+                preds = mc_output_mean.argmax(dim=1)
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             all_preds.extend(preds.cpu().numpy())
