@@ -93,12 +93,21 @@ if __name__ == "__main__":
     torch.save(early_stopping.get_best_model_state(), model_name)
     if run is not None:
         run["best_model_path"].log(model_name)
-    model = MultiHeadGatedAttentionMIL(
-        backbone=config['model'],
-        feature_dropout=config['feature_dropout'],
-        attention_dropout=config['attention_dropout'],
-        shared_attention=config['shared_att']
-        )
+    if config['training_plan']['criterion'].lower() == 'bce':
+        model = GatedAttentionMIL(
+            backbone=config['model'],
+            feature_dropout=config['feature_dropout'],
+            attention_dropout=config['attention_dropout'],
+            config=config
+            )
+    elif config['training_plan']['criterion'].lower() == 'ce':
+        model = MultiHeadGatedAttentionMIL(
+            backbone=config['model'],
+            feature_dropout=config['feature_dropout'],
+            attention_dropout=config['attention_dropout'],
+            shared_attention=config['shared_att'],
+            config=config
+            )
     model.apply(deactivate_batchnorm)
     model.load_state_dict(torch.load(model_name))
     model.to(device)
