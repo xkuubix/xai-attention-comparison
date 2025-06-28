@@ -7,7 +7,10 @@ import torch.nn as nn
 import neptune
 from models import GatedAttentionMIL, MultiHeadGatedAttentionMIL
 import utils
+from quantus_utils import *
 from net_utils import deactivate_batchnorm, test, mc_test
+import pickle
+
 
 
 if __name__ == "__main__":
@@ -17,7 +20,7 @@ if __name__ == "__main__":
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
     runs_table_df = project.fetch_runs_table(
-        id=[f"MCDO-{id}" for id in range(490, 491)],
+        id=[f"MCDO-{id}" for id in range(490, 500)],
         owner="jakub-buler",
         state="inactive",
         trashed=False,
@@ -92,23 +95,79 @@ if __name__ == "__main__":
         # test(model, dataloaders['test'], device, None)
         # mc_test(model, dataloaders['test'], device, N=100, fold_idx=None)
 
+        test_loader = dataloaders['test']
 
+        def reset_seed():
+            """Reset random seeds for reproducibility."""
+            random.seed(SEED)
+            np.random.seed(SEED)
+            torch.manual_seed(SEED)
+            torch.cuda.manual_seed(SEED)
+            torch.cuda.manual_seed_all(SEED)
+        
+        os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
+        
+        if not os.path.exists("results"):
+            os.mkdir("results")
 
-    # SINGLE RUN FOR NOW
+        # Complexity
+        pickle_path = f"results/sparseness_{run['sys/id']}.pkl"
+        if os.path.exists(pickle_path):
+            print(f"Skipping sparseness evaluation for run {run['sys/id']} as results already exist.")
+        else:
+            print(f"Evaluating sparseness for run {run['sys/id']}")
+            reset_seed()
+            with open(pickle_path, 'wb') as f:
+                c = evaluate_sparseness(model, test_loader)
+                pickle.dump(c, f)
+        
+        # Robustness
+        # TODO
 
-    test_loader = dataloaders['test']
+        # Localisation
+        pickle_path = f"results/topkintersection_{run['sys/id']}.pkl"
+        if os.path.exists(pickle_path):
+            print(f"Skipping topk intersection evaluation for run {run['sys/id']} as results already exist.")
+        else:
+            print(f"Evaluating topk intersection for run {run['sys/id']}")
+            reset_seed()
+            with open(pickle_path, 'wb') as f:
+                b = evaluate_topk_intersection(model, test_loader)
+                pickle.dump(b, f)
 
-    from quantus_utils import *
+        pickle_path = f"results/relevance_rank_accuracy_{run['sys/id']}.pkl"
+        if os.path.exists(pickle_path):
+            print(f"Skipping relevance rank accuracy evaluation for run {run['sys/id']} as results already exist.")
+        else:
+            print(f"Evaluating relevance rank accuracy for run {run['sys/id']}")
+            reset_seed()
+            with open(pickle_path, 'wb') as f:
+                b = evaluate_relevance_rank_accuracy(model, test_loader)
+                pickle.dump(b, f)
 
-    # a = evaluate_sparseness(model, test_loader)
-   
-    # b = evaluate_selectivity(model, test_loader, softmax=SOFTMAX)
-   
-    c = evaluate_local_lipschitz_estimate(model, test_loader)
+        # Randomisation (Sensitivity)
+        pickle_path = f"results/mprt_{run['sys/id']}.pkl"
+        if os.path.exists(pickle_path):
+            print(f"Skipping mprt evaluation for run {run['sys/id']} as results already exist.")
+        else:
+            print(f"Evaluating mprt for run {run['sys/id']}")
+            reset_seed()
+            with open(pickle_path, 'wb') as f:
+                d = evaluate_mprt(model, test_loader, softmax=SOFTMAX)
+                pickle.dump(d, f)    
 
-    # b = evaluate_faithfulness_correlation(model, test_loader)
+        # Faithfulness
+        pickle_path = f"results/faithfulness_correlation_{run['sys/id']}.pkl"
+        if os.path.exists(pickle_path):
+            print(f"Skipping faithfulness correlation evaluation for run {run['sys/id']} as results already exist.")
+        else:
+            print(f"Evaluating faithfulness correlation for run {run['sys/id']}")
+            reset_seed()
+            with open(pickle_path, 'wb') as f:
+                a = evaluate_faithfulness_correlation(model, test_loader)
+                pickle.dump(a, f)
 
-    # c = evaluate_relevance_rank_accuracy(model, test_loader)
+# quantus.plot_model_parameter_randomisation_experiment(results=results, methods=["Saliency", "Gradient"], similarity_metric=quantus.similarity_func.correlation_spearman.__name__.replace("_", "").capitalize())
     
 
 
