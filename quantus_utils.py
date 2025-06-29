@@ -2,7 +2,8 @@ import quantus
 import numpy as np
 import torch
 import torch.nn as nn
-
+import logging
+logging.basicConfig(level=logging.ERROR)
 
 class PredictorWrapper(nn.Module):
     def __init__(self, model):
@@ -18,12 +19,37 @@ class PredictorWrapper(nn.Module):
         self.model.reconstruct_attention = value
 
     def forward(self, x):
-        """
-        Quantus-compatible forward pass (returns only prediction logits).
-        Handles cases when model returns either:
-        - a tuple (e.g., logits, attention)
-        - just logits
-        """
+        output = self.model(x)
+        if isinstance(output, tuple):
+            logits = output[0]
+        else:
+            logits = output
+        logits = logits.squeeze(-1) if logits.ndim == 2 and logits.shape[1] == 1 else logits
+        return logits  # shape: (batch_size,)
+
+    def forward_original(self, x):
+        return self.model(x)
+
+
+class PredictorWrapperToSoftmax(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+    @property
+    def reconstruct_attention(self):
+        return self.model.reconstruct_attention
+        
+    @reconstruct_attention.setter
+    def reconstruct_attention(self, value):
+        self.model.reconstruct_attention = value
+    
+    @staticmethod
+    def binary_to_softmax(probs):
+        probs = probs.item() if probs.ndim == 0 else probs.squeeze(-1)
+        probs = torch.stack([1 - probs, probs], dim=1)  # convert to 2-class softmax equivalent
+        return probs
+    
+    def forward(self, x):
         output = self.model(x)
 
         if isinstance(output, tuple):
@@ -31,19 +57,18 @@ class PredictorWrapper(nn.Module):
         else:
             logits = output
 
-        # Ensure 2D shape: (batch_size, 1) or (batch_size,)
         logits = logits.squeeze(-1) if logits.ndim == 2 and logits.shape[1] == 1 else logits
-        return logits  # shape: (batch_size,)
+        softmax_probs = self.binary_to_softmax(torch.sigmoid(logits))
+        return softmax_probs.squeeze(0)  # shape: (batch_size,)
+        # return softmax_probs  # shape: (batch_size, 2)
 
     def forward_original(self, x):
-        """Original forward pass (returns both outputs)"""
         return self.model(x)
 
 def explain_func(inputs: np.ndarray, 
                  model: PredictorWrapper,
                  targets=None,
                  **kwargs) -> np.ndarray:
-        
     wrapper = model
     wrapper.reconstruct_attention = True
     with torch.no_grad():
@@ -53,138 +78,113 @@ def explain_func(inputs: np.ndarray,
         attention_map = attention_map[:, 1, :, :, :]  # Select positive head
     return attention_map.squeeze(0).cpu().numpy()
 
-def evaluate_selectivity(model, test_loader, softmax=True):
-    wrapped_model = PredictorWrapper(model).eval()
-    selectivity = quantus.Selectivity(
-        patch_size=56, perturb_baseline="gaussian_noise",)
-
-    positive_scores = []
-    negative_scores = []
-    for batch in test_loader:
-        image = batch['image']
-        label = batch['target']['label']
-        print("selectivity...")
-        scores = selectivity(
-            model=wrapped_model,
-            x_batch=image.cpu().numpy(),
-            y_batch=label.cpu().numpy().astype(int),
-            explain_func=explain_func,
-            softmax=softmax
-        )
-        print(f"Scores: {scores}")
-        if label.item() == 1:
-            positive_scores.extend(scores)
-        else:
-            negative_scores.extend(scores)
-    return {
-        "positive": np.mean(positive_scores) if positive_scores else None,
-        "negative": np.mean(negative_scores) if negative_scores else None,
-    }
+def evaluate_selectivity(model, test_loader, softmax):
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.Selectivity(patch_size=56, perturb_baseline="gaussian_noise"),
+        softmax=softmax,
+        explain_func=explain_func,
+    )
 
 def evaluate_sparseness(model, test_loader):
-    wrapped_model = PredictorWrapper(model).eval()
-    sparseness = quantus.Sparseness()
-
-    positive_scores = []
-    negative_scores = []
-    for batch in test_loader:
-        image = batch['image']
-        label = batch['target']['label']
-        scores = sparseness(
-            model=wrapped_model,
-            x_batch=image.cpu().numpy(),
-            y_batch=label.cpu().numpy(),
-            a_batch=explain_func(image, wrapped_model),
-        )
-        print(f"Scores: {scores}")
-        if label.item() == 1:
-            positive_scores.extend(scores)
-        else:
-            negative_scores.extend(scores)
-    return {
-        "positive": np.mean(positive_scores) if positive_scores else None,
-        "negative": np.mean(negative_scores) if negative_scores else None,
-    }
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.Sparseness(),
+        needs_a_batch=True,
+        explain_func=explain_func,
+    )
 
 def evaluate_relevance_rank_accuracy(model, test_loader):
-    wrapped_model = PredictorWrapper(model).eval()
-    relevance_rank_accuracy = quantus.RelevanceRankAccuracy()
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.RelevanceRankAccuracy(),
+        needs_a_batch=True,
+        needs_s_batch=True,
+        explain_func=explain_func,
+        skip_label=0, # there are no masks for negative class in CMMD
+    )
 
-    positive_scores = []
+def evaluate_topk_intersection(model, test_loader):
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.TopKIntersection(k=400_000),
+        needs_a_batch=True,
+        needs_s_batch=True,
+        explain_func=explain_func,
+        skip_label=0, # there are no masks for negative class in CMMD
+    )
+
+def evaluate_faithfulness_correlation(model, test_loader, softmax):
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.FaithfulnessCorrelation(perturb_baseline="uniform"),
+        needs_a_batch=True,
+        needs_s_batch=True,
+        explain_func=explain_func,
+        wrap_wrapper=softmax,
+    )
+
+def evaluate_mprt(model, test_loader, softmax):
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.MPRT(similarity_func=quantus.similarity_func.cosine),
+        wrap_wrapper=softmax,
+        explain_func=explain_func,
+    )
+
+
+def evaluate_metric_by_class(
+    model,
+    test_loader,
+    metric,
+    wrap_wrapper=False,
+    explain_func=None,
+    needs_a_batch=False,
+    needs_s_batch=False,
+    mask_key='mask',
+    skip_label=None
+):
+    model.eval()
+    wrapped_model = PredictorWrapper(model) if not wrap_wrapper else PredictorWrapperToSoftmax(model)
+    print(wrapped_model.__class__.__name__)
+    wrapped_model.eval()
+
+    positive_scores, negative_scores = [], []
+
+    skipped_count = 0
     for batch in test_loader:
+        image = batch['image']
         label = batch['target']['label']
-        if label.item() == 0:
+        mask = batch['target'].get(mask_key, None)
+        if skip_label is not None and label.item() == skip_label:
+            skipped_count += 1
             continue
-        image = batch['image']
-        mask = batch['target'].get('mask', None)
-        if mask is not None:
-            mask = mask.unsqueeze(0)
-        if label.item() == 1:
-            scores = relevance_rank_accuracy(
-                model=wrapped_model,
-                x_batch=image.cpu().numpy(),
-                y_batch=label.cpu().numpy(),
-                a_batch=explain_func(image, wrapped_model),
-                s_batch=mask.cpu().numpy() if mask is not None else None,
-            )
-            print(f"Scores: {scores}")
-            positive_scores.extend(scores)
 
-    return {
-        "positive": np.mean(positive_scores) if positive_scores else None,
-    }
+        kwargs = {
+            'model': wrapped_model,
+            'x_batch': image.cpu().numpy(),
+            'y_batch': label.cpu().numpy().astype(int),
+        }
+        if needs_a_batch:
+            kwargs['a_batch'] = explain_func(image, wrapped_model)
+        if needs_s_batch and mask is not None:
+            kwargs['s_batch'] = mask.unsqueeze(0).cpu().numpy()
+        if explain_func is not None and 'explain_func' in metric.__call__.__code__.co_varnames:
+            kwargs['explain_func'] = explain_func
+            kwargs['softmax'] = wrap_wrapper
 
-
-def evaluate_faithfulness_correlation(model, test_loader):
-    wrapped_model = PredictorWrapper(model).eval()
-    faithfulness_correlation = quantus.FaithfulnessCorrelation()
-
-    positive_scores = []
-    negative_scores = []
-    for batch in test_loader:
-        image = batch['image']
-        label = batch['target']['label']
-        mask = batch['target'].get('mask', None)
-        attention=explain_func(image, wrapped_model)
-        scores = faithfulness_correlation(
-            model=wrapped_model,
-            x_batch=image.cpu().numpy(),
-            y_batch=label.cpu().numpy().astype(int),
-            a_batch=explain_func(image, wrapped_model),
-            s_batch=mask.cpu().numpy() if mask is not None else None,
-        )
+        output = wrapped_model(image)
+        scores = metric(**kwargs)
         print(f"Scores: {scores}")
-        if label.item() == 1:
-            positive_scores.extend(scores)
-        else:
-            negative_scores.extend(scores)
-    return {
-        "positive": np.mean(positive_scores) if positive_scores else None,
-        "negative": np.mean(negative_scores) if negative_scores else None,
-    }
 
-def evaluate_local_lipschitz_estimate(model, test_loader):
-    wrapped_model = PredictorWrapper(model).eval()
-    local_lipschitz_estimate = quantus.LocalLipschitzEstimate()
-
-    positive_scores = []
-    negative_scores = []
-    for batch in test_loader:
-        image = batch['image']
-        label = batch['target']['label']
-        scores = local_lipschitz_estimate(
-            model=wrapped_model,
-            x_batch=image.cpu().numpy(),
-            y_batch=label.cpu().numpy().astype(int),
-            # a_batch=explain_func(image, wrapped_model),
-            explain_func=explain_func,
-        )
-        print(f"Scores: {scores}")
         if label.item() == 1:
-            positive_scores.extend(scores)
+            # positive_scores.extend(scores)
+            positive_scores.append(scores)
         else:
-            negative_scores.extend(scores)
+            # negative_scores.extend(scores)
+            negative_scores.append(scores)
+    print(f"Skipped {skipped_count} samples with label {skip_label}.")
     return {
-        "positive": np.mean(positive_scores) if positive_scores else None,
-        "negative": np.mean(negative_scores) if negative_scores else None,
+        "positive": positive_scores,
+        "negative": negative_scores,
     }
