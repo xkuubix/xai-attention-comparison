@@ -131,7 +131,7 @@ if __name__ == "__main__":
         model_name = os.path.join(config['model_path'], tag, f"fold_{fold + 1}",f"{uuid.uuid4().hex}.pth")
         torch.save(early_stopping.get_best_model_state(), model_name)
         if run is not None:
-            run[f"fold_{fold + 1}/best_model_path"].log(model_name)
+            run[f"best_model_path"].log(model_name)
         if config['training_plan']['criterion'].lower() == 'bce':
             model = GatedAttentionMIL(
                 backbone=config['model'],
