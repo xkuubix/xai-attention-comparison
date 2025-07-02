@@ -10,6 +10,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split, KFold
 from typing import Dict
 from torch.utils.data import Dataset
+import re
 
 
 def get_args_parser():
@@ -163,7 +164,7 @@ def get_fold_dataloaders(config, fold_idx):
     # train_val_df, test_df = train_test_split(df, test_size=config['data']['fraction_test'],
     #                                          random_state=seed, stratify=df['class'])
 
-    train_val_df, _, test_df = random_split_df(df, train_rest_frac=0.8, val_test_frac=0.0, seed=42)
+    train_val_df, _, test_df = random_split_df(df, train_rest_frac=0.8, val_test_frac=0.0, seed=seed)
 
 
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=seed)
@@ -214,3 +215,12 @@ def get_fold_dataloaders(config, fold_idx):
         config=config,
         g=g
     )
+
+
+def get_fold_number(model_name: str) -> int:
+    # regex looks for 'fold_' followed by one or more digits
+    match = re.search(r"fold_(\d+)", model_name)
+    if match:
+        return int(match.group(1))
+    else:
+        raise ValueError(f"No fold number found in '{model_name}'")
