@@ -31,11 +31,7 @@ if __name__ == "__main__":
         device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
         SEED = run['config/seed']
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"  # or ":16:8"
-        random.seed(SEED)
-        np.random.seed(SEED)
-        torch.manual_seed(SEED)
-        torch.cuda.manual_seed(SEED)
-        torch.cuda.manual_seed_all(SEED)
+        utils.reset_seed(SEED)
         torch.use_deterministic_algorithms(True)
         torch.set_default_dtype(torch.float32)
 
@@ -96,14 +92,6 @@ if __name__ == "__main__":
         # mc_test(model, dataloaders['test'], device, N=100, fold_idx=None)
 
         test_loader = dataloaders['test']
-
-        def reset_seed():
-            """Reset random seeds for reproducibility."""
-            random.seed(SEED)
-            np.random.seed(SEED)
-            torch.manual_seed(SEED)
-            torch.cuda.manual_seed(SEED)
-            torch.cuda.manual_seed_all(SEED)
         
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
         
@@ -116,7 +104,7 @@ if __name__ == "__main__":
             print(f"Skipping sparseness evaluation for run {run['sys/id']} as results already exist.")
         else:
             print(f"Evaluating sparseness for run {run['sys/id']}")
-            reset_seed()
+            utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
                 c = evaluate_sparseness(model, test_loader)
                 pickle.dump(c, f)
@@ -130,7 +118,7 @@ if __name__ == "__main__":
             print(f"Skipping topk intersection evaluation for run {run['sys/id']} as results already exist.")
         else:
             print(f"Evaluating topk intersection for run {run['sys/id']}")
-            reset_seed()
+            utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
                 b = evaluate_topk_intersection(model, test_loader)
                 pickle.dump(b, f)
@@ -140,7 +128,7 @@ if __name__ == "__main__":
             print(f"Skipping relevance rank accuracy evaluation for run {run['sys/id']} as results already exist.")
         else:
             print(f"Evaluating relevance rank accuracy for run {run['sys/id']}")
-            reset_seed()
+            utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
                 b = evaluate_relevance_rank_accuracy(model, test_loader)
                 pickle.dump(b, f)
@@ -151,7 +139,7 @@ if __name__ == "__main__":
             print(f"Skipping mprt evaluation for run {run['sys/id']} as results already exist.")
         else:
             print(f"Evaluating mprt for run {run['sys/id']}")
-            reset_seed()
+            utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
                 d = evaluate_mprt(model, test_loader, softmax=SOFTMAX)
                 pickle.dump(d, f)    
@@ -162,13 +150,10 @@ if __name__ == "__main__":
             print(f"Skipping faithfulness correlation evaluation for run {run['sys/id']} as results already exist.")
         else:
             print(f"Evaluating faithfulness correlation for run {run['sys/id']}")
-            reset_seed()
+            utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
-                a = evaluate_faithfulness_correlation(model, test_loader)
+                a = evaluate_faithfulness_correlation(model, test_loader, softmax=~SOFTMAX)
                 pickle.dump(a, f)
-
-# quantus.plot_model_parameter_randomisation_experiment(results=results, methods=["Saliency", "Gradient"], similarity_metric=quantus.similarity_func.correlation_spearman.__name__.replace("_", "").capitalize())
-    
 
 
 # %%
