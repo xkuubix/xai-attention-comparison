@@ -70,7 +70,8 @@ if __name__ == "__main__":
             "data": {
             "metadata_path": run['config/data/metadata_path'],
             "fraction_train_rest": run['config/data/fraction_train_rest'],
-            "fraction_val_test": run['config/data/fraction_val_test']
+            "fraction_val_test": run['config/data/fraction_val_test'],
+            "cv_folds": run['config/data/cv_folds'],
             },
             "training_plan": {
             "criterion": run['config/training_plan/criterion'],
@@ -82,8 +83,14 @@ if __name__ == "__main__":
             "seed": SEED,
             "device": selected_device
         }
-        dataloaders = utils.get_dataloaders(data_config)
+        
 
+        # dataloaders = utils.get_dataloaders(data_config)
+
+        fold = utils.get_fold_number(run['best_model_path']) - 1
+        dataloaders = utils.get_fold_dataloaders(data_config, fold)
+        
+        
         model_name = run['best_model_path']
         print(f"Loading model from: {model_name}")
         model.load_state_dict(torch.load(model_name))
@@ -95,11 +102,12 @@ if __name__ == "__main__":
         
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
         
-        if not os.path.exists("results"):
-            os.mkdir("results")
+        folder_path = "cv_results"
+        if not os.path.exists(folder_path):
+            os.mkdir(folder_path)
 
         # Complexity
-        pickle_path = f"results/sparseness_{run['sys/id']}.pkl"
+        pickle_path = f"{folder_path}/sparseness_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
             print(f"Skipping sparseness evaluation for run {run['sys/id']} as results already exist.")
         else:
@@ -113,7 +121,7 @@ if __name__ == "__main__":
         # TODO
 
         # Localisation
-        pickle_path = f"results/topkintersection_{run['sys/id']}.pkl"
+        pickle_path = f"{folder_path}/topkintersection_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
             print(f"Skipping topk intersection evaluation for run {run['sys/id']} as results already exist.")
         else:
@@ -123,7 +131,7 @@ if __name__ == "__main__":
                 b = evaluate_topk_intersection(model, test_loader)
                 pickle.dump(b, f)
 
-        pickle_path = f"results/relevance_rank_accuracy_{run['sys/id']}.pkl"
+        pickle_path = f"{folder_path}/relevance_rank_accuracy_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
             print(f"Skipping relevance rank accuracy evaluation for run {run['sys/id']} as results already exist.")
         else:
@@ -134,7 +142,7 @@ if __name__ == "__main__":
                 pickle.dump(b, f)
 
         # Randomisation (Sensitivity)
-        pickle_path = f"results/mprt_{run['sys/id']}.pkl"
+        pickle_path = f"{folder_path}/mprt_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
             print(f"Skipping mprt evaluation for run {run['sys/id']} as results already exist.")
         else:
@@ -145,7 +153,7 @@ if __name__ == "__main__":
                 pickle.dump(d, f)    
 
         # Faithfulness
-        pickle_path = f"results/faithfulness_correlation_{run['sys/id']}.pkl"
+        pickle_path = f"{folder_path}/faithfulness_correlation_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
             print(f"Skipping faithfulness correlation evaluation for run {run['sys/id']} as results already exist.")
         else:
