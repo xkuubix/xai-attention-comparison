@@ -48,7 +48,7 @@ if __name__ == "__main__":
                 attention_dropout=run['config/attention_dropout'],
                 config=model_config
                 )
-            SOFTMAX = False
+            is_single = True
         elif run['model/architecture'] == 'MultiHeadGatedAttentionMIL':
             model = MultiHeadGatedAttentionMIL(
                 backbone=run['config/model'],
@@ -57,7 +57,7 @@ if __name__ == "__main__":
                 shared_attention=run['config/shared_att'],
                 config=model_config
                 )
-            SOFTMAX = True
+            is_single = False
 
         print("--"*30)
         print(f"Run ID: {run['sys/id']}")
@@ -114,11 +114,19 @@ if __name__ == "__main__":
             print(f"Evaluating sparseness for run {run['sys/id']}")
             utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
-                c = evaluate_sparseness(model, test_loader)
-                pickle.dump(c, f)
+                complexity = evaluate_sparseness(model, test_loader)
+                pickle.dump(complexity, f)
         
         # Robustness
-        # TODO
+        pickle_path = f"{folder_path}/avg_sensitivity_{run['sys/id']}.pkl"
+        if os.path.exists(pickle_path):
+            print(f"Skipping avg sensitivity evaluation for run {run['sys/id']} as results already exist.")
+        else:
+            print(f"Evaluating avg sensitivity for run {run['sys/id']}")
+            utils.reset_seed(SEED)
+            with open(pickle_path, 'wb') as f:
+                sensitivity = evaluate_avg_sensitivity(model, test_loader)
+                pickle.dump(sensitivity, f)    
 
         # Localisation
         pickle_path = f"{folder_path}/topkintersection_{run['sys/id']}.pkl"
@@ -128,8 +136,8 @@ if __name__ == "__main__":
             print(f"Evaluating topk intersection for run {run['sys/id']}")
             utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
-                b = evaluate_topk_intersection(model, test_loader)
-                pickle.dump(b, f)
+                tki = evaluate_topk_intersection(model, test_loader)
+                pickle.dump(tki, f)
 
         pickle_path = f"{folder_path}/relevance_rank_accuracy_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
@@ -138,10 +146,10 @@ if __name__ == "__main__":
             print(f"Evaluating relevance rank accuracy for run {run['sys/id']}")
             utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
-                b = evaluate_relevance_rank_accuracy(model, test_loader)
-                pickle.dump(b, f)
+                rra = evaluate_relevance_rank_accuracy(model, test_loader)
+                pickle.dump(rra, f)
 
-        # Randomisation (Sensitivity)
+        # Randomisation
         pickle_path = f"{folder_path}/mprt_{run['sys/id']}.pkl"
         if os.path.exists(pickle_path):
             print(f"Skipping mprt evaluation for run {run['sys/id']} as results already exist.")
@@ -149,8 +157,8 @@ if __name__ == "__main__":
             print(f"Evaluating mprt for run {run['sys/id']}")
             utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
-                d = evaluate_mprt(model, test_loader, softmax=SOFTMAX)
-                pickle.dump(d, f)    
+                mprt = evaluate_mprt(model, test_loader)
+                pickle.dump(mprt, f)    
 
         # Faithfulness
         pickle_path = f"{folder_path}/faithfulness_correlation_{run['sys/id']}.pkl"
@@ -160,8 +168,8 @@ if __name__ == "__main__":
             print(f"Evaluating faithfulness correlation for run {run['sys/id']}")
             utils.reset_seed(SEED)
             with open(pickle_path, 'wb') as f:
-                a = evaluate_faithfulness_correlation(model, test_loader, softmax=~SOFTMAX)
-                pickle.dump(a, f)
+                faithfulness = evaluate_faithfulness_correlation(model, test_loader, use_wrapper=is_single)
+                pickle.dump(faithfulness, f)
 
 
 # %%
