@@ -315,16 +315,13 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         instances = instances.view(bs*num_instances, ch, w, h)
         # Feature extraction only once
         with torch.no_grad():
-            H = self.feature_extractor(instances)
-            H = H.view(bs, num_instances, -1)
-
-        with torch.no_grad():
             # 1. Feature extraction (single pass)
             H = self.feature_extractor(instances.view(-1, *instances.shape[-3:]))
             H = H.view(bs, num_instances, -1)  # (bs, num_instances, L)
             
             # 2. Expand features for MC sampling
             H_expanded = H.unsqueeze(0).expand(N, -1, -1, -1)  # (N, bs, num_instances, L)
+            # H_expanded = H.repeat(0).repeat(N, 1, 1, 1)  # (N, bs, num_instances, L)
             H_drop = self.feature_dropout(H_expanded)  # Apply dropout to all samples
             
             # 3. Parallel attention computation
