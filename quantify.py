@@ -20,7 +20,7 @@ if __name__ == "__main__":
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
     runs_table_df = project.fetch_runs_table(
-        id=[f"MCDO-{id}" for id in range(490, 500)],
+        id=[f"MCDO-{id}" for id in range(522, 523)],
         owner="jakub-buler",
         state="inactive",
         trashed=False,
@@ -84,7 +84,6 @@ if __name__ == "__main__":
             "device": selected_device
         }
         
-
         # dataloaders = utils.get_dataloaders(data_config)
 
         fold = utils.get_fold_number(run['best_model_path']) - 1
@@ -95,81 +94,33 @@ if __name__ == "__main__":
         print(f"Loading model from: {model_name}")
         model.load_state_dict(torch.load(model_name))
         model.to(device)
-        # test(model, dataloaders['test'], device, None)
-        # mc_test(model, dataloaders['test'], device, N=100, fold_idx=None)
 
         test_loader = dataloaders['test']
         
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
         
         folder_path = "cv_results"
-        if not os.path.exists(folder_path):
-            os.mkdir(folder_path)
+        os.makedirs(folder_path, exist_ok=True)
+       
+        EVALUATIONS = [
+            {"name": "sparseness", "fn": evaluate_sparseness},
+            {"name": "avg_sensitivity", "fn": evaluate_avg_sensitivity},
+            {"name": "topkintersection", "fn": evaluate_topk_intersection},
+            {"name": "relevance_rank_accuracy", "fn": evaluate_relevance_rank_accuracy},
+            {"name": "mprt", "fn": evaluate_mprt},
+            {"name": "faithfulness_correlation", "fn": lambda m, d: evaluate_faithfulness_correlation(m, d, use_wrapper=is_single)},
+        ]
 
-        # Complexity
-        pickle_path = f"{folder_path}/sparseness_{run['sys/id']}.pkl"
-        if os.path.exists(pickle_path):
-            print(f"Skipping sparseness evaluation for run {run['sys/id']} as results already exist.")
-        else:
-            print(f"Evaluating sparseness for run {run['sys/id']}")
-            utils.reset_seed(SEED)
-            with open(pickle_path, 'wb') as f:
-                complexity = evaluate_sparseness(model, test_loader)
-                pickle.dump(complexity, f)
-        
-        # Robustness
-        pickle_path = f"{folder_path}/avg_sensitivity_{run['sys/id']}.pkl"
-        if os.path.exists(pickle_path):
-            print(f"Skipping avg sensitivity evaluation for run {run['sys/id']} as results already exist.")
-        else:
-            print(f"Evaluating avg sensitivity for run {run['sys/id']}")
-            utils.reset_seed(SEED)
-            with open(pickle_path, 'wb') as f:
-                sensitivity = evaluate_avg_sensitivity(model, test_loader)
-                pickle.dump(sensitivity, f)    
+        for eval_task in EVALUATIONS:
+            pickle_path = f"{folder_path}/{eval_task['name']}_{run['sys/id']}.pkl"
 
-        # Localisation
-        pickle_path = f"{folder_path}/topkintersection_{run['sys/id']}.pkl"
-        if os.path.exists(pickle_path):
-            print(f"Skipping topk intersection evaluation for run {run['sys/id']} as results already exist.")
-        else:
-            print(f"Evaluating topk intersection for run {run['sys/id']}")
-            utils.reset_seed(SEED)
-            with open(pickle_path, 'wb') as f:
-                tki = evaluate_topk_intersection(model, test_loader)
-                pickle.dump(tki, f)
-
-        pickle_path = f"{folder_path}/relevance_rank_accuracy_{run['sys/id']}.pkl"
-        if os.path.exists(pickle_path):
-            print(f"Skipping relevance rank accuracy evaluation for run {run['sys/id']} as results already exist.")
-        else:
-            print(f"Evaluating relevance rank accuracy for run {run['sys/id']}")
-            utils.reset_seed(SEED)
-            with open(pickle_path, 'wb') as f:
-                rra = evaluate_relevance_rank_accuracy(model, test_loader)
-                pickle.dump(rra, f)
-
-        # Randomisation
-        pickle_path = f"{folder_path}/mprt_{run['sys/id']}.pkl"
-        if os.path.exists(pickle_path):
-            print(f"Skipping mprt evaluation for run {run['sys/id']} as results already exist.")
-        else:
-            print(f"Evaluating mprt for run {run['sys/id']}")
-            utils.reset_seed(SEED)
-            with open(pickle_path, 'wb') as f:
-                mprt = evaluate_mprt(model, test_loader)
-                pickle.dump(mprt, f)    
-
-        # Faithfulness
-        pickle_path = f"{folder_path}/faithfulness_correlation_{run['sys/id']}.pkl"
-        if os.path.exists(pickle_path):
-            print(f"Skipping faithfulness correlation evaluation for run {run['sys/id']} as results already exist.")
-        else:
-            print(f"Evaluating faithfulness correlation for run {run['sys/id']}")
-            utils.reset_seed(SEED)
-            with open(pickle_path, 'wb') as f:
-                faithfulness = evaluate_faithfulness_correlation(model, test_loader, use_wrapper=is_single)
-                pickle.dump(faithfulness, f)
-
+            if os.path.exists(pickle_path):
+                print(f"Skipping {eval_task['name']} for run {run['sys/id']} as results already exist.")
+            else:
+                print(f"Evaluating {eval_task['name']} for run {run['sys/id']}")
+                utils.reset_seed(SEED)
+                with open(pickle_path, 'wb') as f:
+                    result = eval_task["fn"](model, test_loader)
+                    pickle.dump(result, f)
 
 # %%
