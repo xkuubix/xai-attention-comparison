@@ -78,11 +78,11 @@ def explain_func(inputs: np.ndarray,
         attention_map = attention_map[:, 1, :, :, :]  # Select positive head
     return attention_map.squeeze(0).cpu().numpy()
 
-def evaluate_selectivity(model, test_loader, softmax):
+def evaluate_selectivity(model, test_loader, use_wrapper):
     return evaluate_metric_by_class(
         model, test_loader,
         metric=quantus.Selectivity(patch_size=56, perturb_baseline="gaussian_noise"),
-        softmax=softmax,
+        use_wrapper=use_wrapper,
         explain_func=explain_func,
     )
 
@@ -107,37 +107,42 @@ def evaluate_relevance_rank_accuracy(model, test_loader):
 def evaluate_topk_intersection(model, test_loader):
     return evaluate_metric_by_class(
         model, test_loader,
-        metric=quantus.TopKIntersection(k=400_000),
+        metric=quantus.TopKIntersection(k=40_000),
         needs_a_batch=True,
         needs_s_batch=True,
         explain_func=explain_func,
         skip_label=0, # there are no masks for negative class in CMMD
     )
 
-def evaluate_faithfulness_correlation(model, test_loader, softmax):
+def evaluate_faithfulness_correlation(model, test_loader, use_wrapper):
     return evaluate_metric_by_class(
         model, test_loader,
         metric=quantus.FaithfulnessCorrelation(perturb_baseline="uniform"),
         needs_a_batch=True,
         needs_s_batch=True,
         explain_func=explain_func,
-        wrap_wrapper=softmax,
+        use_wrapper=use_wrapper,
     )
 
-def evaluate_mprt(model, test_loader, softmax):
+def evaluate_mprt(model, test_loader):
     return evaluate_metric_by_class(
         model, test_loader,
         metric=quantus.MPRT(similarity_func=quantus.similarity_func.cosine),
-        wrap_wrapper=softmax,
         explain_func=explain_func,
     )
 
+def evaluate_avg_sensitivity(model, test_loader):
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.AvgSensitivity(nr_samples=10),
+        explain_func=explain_func,
+    )
 
 def evaluate_metric_by_class(
     model,
     test_loader,
     metric,
-    wrap_wrapper=False,
+    use_wrapper=False,
     explain_func=None,
     needs_a_batch=False,
     needs_s_batch=False,
@@ -145,7 +150,7 @@ def evaluate_metric_by_class(
     skip_label=None
 ):
     model.eval()
-    wrapped_model = PredictorWrapper(model) if not wrap_wrapper else PredictorWrapperToSoftmax(model)
+    wrapped_model = PredictorWrapper(model) if not use_wrapper else PredictorWrapperToSoftmax(model)
     print(wrapped_model.__class__.__name__)
     wrapped_model.eval()
 
@@ -171,7 +176,7 @@ def evaluate_metric_by_class(
             kwargs['s_batch'] = mask.unsqueeze(0).cpu().numpy()
         if explain_func is not None and 'explain_func' in metric.__call__.__code__.co_varnames:
             kwargs['explain_func'] = explain_func
-            kwargs['softmax'] = wrap_wrapper
+            kwargs['softmax'] = False
 
         output = wrapped_model(image)
         scores = metric(**kwargs)
