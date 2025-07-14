@@ -7,8 +7,8 @@ model: "r18"
 shared_att: False
 
 is_MCDO-val: False
-is_MCDO-test: True
-N: 50
+is_MCDO-test: False
+N: 100
 feature_dropout: 0.1
 attention_dropout: 0.1
 
@@ -19,11 +19,11 @@ data:
   metadata_path: '/users/project1/pt01190/TOMPEI-CMMD/df_with_masks.pkl'
   
   patch_size: 128
-  overlap: 0.5
+  overlap: .75
   empty_threshold: 0.75
   bag_size: -1
 
-  # cv_folds: 5
+  cv_folds: 5
   # fraction_test: 0.15
 
 training_plan:
@@ -33,10 +33,10 @@ training_plan:
     lr: 0.001
     wd: 0.001
     epochs: 1000
-    patience: 50
+    patience: 20
     grad_acc_steps: 2
 
-  criterion: 'ce'
+  criterion: 'bce'
   optimizer: 'sgd'
 
   scheduler:
