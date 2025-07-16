@@ -88,17 +88,14 @@ if __name__ == "__main__":
 
         fold = utils.get_fold_number(run['best_model_path']) - 1
         dataloaders = utils.get_fold_dataloaders(data_config, fold)
-        
+        test_loader = dataloaders['test']
         
         model_name = run['best_model_path']
         print(f"Loading model from: {model_name}")
         model.load_state_dict(torch.load(model_name))
         model.to(device)
-
-        test_loader = dataloaders['test']
         
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
-        
         folder_path = "cv_results"
         os.makedirs(folder_path, exist_ok=True)
        
