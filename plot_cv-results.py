@@ -3,7 +3,8 @@ import pandas as pd
 import os, re
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import matplotlib as mpl
+mpl.rcParams['ps.fonttype'] = 3  # eps @ problem in latex
 import pickle
 import neptune
 import numpy as np
@@ -97,8 +98,8 @@ meta_df = pd.DataFrame()
 meta_df["id"] = runs_df["sys/name"].str.replace("MCDO-", "", regex=False)
 variant_parts = runs_df["best_model_path"].str.extract(r"/([A-Z]+)_([0-9]+)_at_([0-9.]+)/")
 meta_df["training_variant"] = (
-    variant_parts[0] + "#" + variant_parts[1] + 
-    variant_parts[2].apply(lambda x: f"@{float(x):.2f}")
+    variant_parts[0] + " #" + variant_parts[1] + 
+    variant_parts[2].apply(lambda x: f" @{float(x):.2f}")
 )
 meta_df["fold"] = runs_df["best_model_path"].str.extract(r"/fold_(\d+)/")[0].astype(int)
 report_df = pd.concat([meta_df, report_flat], axis=1)
@@ -157,14 +158,14 @@ def plot_single_metric_boxplot(flat_df, metric_name, use_labels=True):
         return
 
     variant_order = [
-        'SH#224@0.50',
-        'SH#224@0.75',
-        'SH#128@0.50',
-        'SH#128@0.75',
-        'MH#224@0.50',
-        'MH#224@0.75',
-        'MH#128@0.50',
-        'MH#128@0.75',
+        'SH #224 @0.50',
+        'SH #224 @0.75',
+        'SH #128 @0.50',
+        'SH #128 @0.75',
+        'MH #224 @0.50',
+        'MH #224 @0.75',
+        'MH #128 @0.50',
+        'MH #128 @0.75',
     ]
 
     def custom_formatter(value):
