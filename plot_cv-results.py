@@ -205,62 +205,70 @@ def plot_single_metric_boxplot(flat_df, metric_name, use_labels=True):
         annot_pos = np.vectorize(custom_formatter)(heatmap_data_pos)
         sns.heatmap(
             heatmap_data_pos,
+            cbar=False,
             annot=annot_pos,
-            annot_kws={'size': 18, 'font': 'Nimbus Roman'},
+            annot_kws={'size': 26, 'font': 'Nimbus Roman'},
             fmt="",
             cmap="gray",
             linewidths=0.5,
             linecolor='black',
             ax=axes[0]
         )
-        axes[0].set_title(f'{metric_name} Heatmap (Positive)', fontdict={'fontsize': 16})
-        axes[0].set_xlabel('Fold', fontsize=14)
-        axes[0].set_ylabel('Training Variant', fontsize=14)
-        axes[0].tick_params(axis='x', labelrotation=0, labelsize=14)
-        axes[0].tick_params(axis='y', labelrotation=0, labelsize=14)
+        axes[0].set_title(f'{metric_name} Heatmap (Positive)', fontdict={'fontsize': 20})
+        axes[0].set_xlabel('Fold', fontsize=20)
+        axes[0].set_ylabel('Training Variant', fontsize=20)
+        axes[0].tick_params(axis='x', labelrotation=0, labelsize=20)
+        axes[0].tick_params(axis='y', labelrotation=0, labelsize=20)
 
         annot_neg = np.vectorize(custom_formatter)(heatmap_data_neg)
         sns.heatmap(
             heatmap_data_neg,
+            cbar=False,
             annot=annot_neg,
-            annot_kws={'size': 18, 'font': 'Nimbus Roman'},
+            annot_kws={'size': 26, 'font': 'Nimbus Roman'},
             fmt="",
             cmap="gray",
             linewidths=0.5,
             linecolor='black',
             ax=axes[1]
         )
-        axes[1].set_title(f'{metric_name} Heatmap (Negative)', fontdict={'fontsize': 16})
-        axes[1].set_xlabel('Fold', fontsize=14)
-        axes[1].set_ylabel('Training Variant', fontsize=14)
-        axes[1].tick_params(axis='x', labelrotation=0, labelsize=14)
-        axes[1].tick_params(axis='y', labelrotation=0, labelsize=14)
+        axes[1].set_title(f'{metric_name} Heatmap (Negative)', fontdict={'fontsize': 20})
+        axes[1].set_xlabel('Fold', fontsize=20)
+        axes[1].set_ylabel(' ', fontsize=1)
+        axes[1].tick_params(axis='x', labelrotation=0, labelsize=20)
+        axes[1].tick_params(axis='y', labelrotation=0, labelsize=20)
 
         plt.tight_layout()
         plt.show()
     else:
-        plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(9, 6))
         annot_pos = np.vectorize(custom_formatter)(heatmap_data_pos)
         sns.heatmap(
             heatmap_data_pos,
+            cbar=False,
             annot=annot_pos,
-            annot_kws={'size': 18, 'font': 'Nimbus Roman'},
+            annot_kws={'size': 26, 'font': 'Nimbus Roman'},
             fmt="",
             cmap="gray",
             linewidths=0.5,
             linecolor='black',
         )
-        plt.title(f'{metric_name} Heatmap (Positive)', fontdict={'fontsize': 16})
-        plt.xlabel('Fold', fontsize=14)
-        plt.ylabel('Training Variant', fontsize=14)
-        plt.xticks(rotation=0, fontsize=14)
-        plt.yticks(rotation=0, fontsize=14)
+        plt.title(f'{metric_name} Heatmap (Positive)', fontdict={'fontsize': 20})
+        plt.xlabel('Fold', fontsize=20)
+        plt.ylabel('Training Variant', fontsize=20)
+        plt.xticks(rotation=0, fontsize=20)
+        plt.yticks(rotation=0, fontsize=20)
         plt.tight_layout()
         plt.show()
         if use_labels:
             print(f"[Info] No negative scores found for metric: {metric_name}")
         
-    plt.savefig(f"heatmap_{metric_name}_positive.eps", format='eps', bbox_inches='tight')
+    
+    metric_name_clean = metric_name.replace(" ", "_").replace("/", "_")
+
+    fig.savefig(f"heatmap_{metric_name_clean}_positive.pdf",
+                format='pdf',
+                dpi=300)
 
 plot_single_metric_boxplot(flat_df, "Sparseness", use_labels=True)
 plot_single_metric_boxplot(flat_df, "Top-K Intersection", use_labels=False)
