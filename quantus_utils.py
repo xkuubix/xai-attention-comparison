@@ -75,8 +75,9 @@ class PredictorWrapperToSoftmax(nn.Module):
 
         logits = logits.squeeze(-1) if logits.ndim == 2 and logits.shape[1] == 1 else logits
         softmax_probs = self.binary_to_softmax(torch.sigmoid(logits))
-        return softmax_probs.squeeze(0)  # shape: (batch_size,)
-        # return softmax_probs  # shape: (batch_size, 2)
+        return softmax_probs#.reshape(-1, 1) # shape: (batch_size,)
+        # return softmax_probs.squeeze(0)   # shape: (batch_size,)
+        # return softmax_probs              # shape: (batch_size, 2)
 
     def forward_original(self, x):
         return self.model(x)
