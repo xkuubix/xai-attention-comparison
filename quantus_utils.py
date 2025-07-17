@@ -24,8 +24,24 @@ class PredictorWrapper(nn.Module):
             logits = output[0]
         else:
             logits = output
-        logits = logits.squeeze(-1) if logits.ndim == 2 and logits.shape[1] == 1 else logits
-        return logits  # shape: (batch_size,)
+
+        # Handle binary models (single logit output)
+        # if logits.ndim == 2 and logits.shape[1] == 1:
+        logits = logits.squeeze(-1)  # shape: (B,)
+        
+        # Case 1: binary classification (sigmoid output)
+        if logits.ndim == 1:
+            probs = torch.sigmoid(logits)  # shape: (B,)
+            probs = torch.stack([1 - probs, probs], dim=1)  # shape: (B, 2)
+
+        # Case 2: multiclass (or binary) with softmax
+        elif logits.ndim == 2:
+            probs = torch.softmax(logits, dim=1)  # shape: (B, C)
+
+        else:
+            raise ValueError(f"Unexpected output shape from model {logits.shape}. ")
+
+        return probs  # always shape: (B, 2)
 
     def forward_original(self, x):
         return self.model(x)
