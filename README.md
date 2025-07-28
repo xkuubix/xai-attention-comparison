@@ -10,6 +10,13 @@ The models compared:
 - **Baseline**: Gated Attention MIL (Ilse et al., 2018)
 - **Proposed**: Multi-Head Attention MIL with one head per class
 
+<p align="center">
+  <img src="figures/architecture.png" width="600"/>
+  <br/>
+  <em>Figure: Schematic of the proposed multi-head MIL attention architecture.</em>
+</p>
+
+
 ## 🧠 Explanation Evaluation
 
 To assess the **quality of attention-based explanations**, we employ the [**Quantus**](https://github.com/understandable-machine-intelligence/quantus) library — a Python framework for **explainability evaluation** in machine learning. Various metrics such as **Faithfulness**, **Sensitivity**, **Sparsity**, and **Localization** were used to quantitatively compare the models.
