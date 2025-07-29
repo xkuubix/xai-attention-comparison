@@ -97,8 +97,13 @@ if __name__ == "__main__":
 
         test_loader = dataloaders['test']
 
-        if not os.path.exists(f"attentions/{run['sys/id']}"):
-            os.mkdir(f"attentions/{run['sys/id']}")
+        os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
+        path = "../results/attentions-mcdo"
+        # path = "../results/attentions"
+
+        if not os.path.exists(f"{path}/{run['sys/id']}"):
+            os.mkdir(f"{path}/{run['sys/id']}")
+            print(f"\nCreating attention directory for run {run['sys/id']} at {path}/{run['sys/id']}")
         else:
             print(f"\nAttention directory for run {run['sys/id']} already exists. Skipping attention visualization.")
             continue

@@ -11,7 +11,8 @@ import numpy as np
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-results_dir = "cv_results"
+os.chdir("users/project1/pt01190/TOMPEI-CMMD/code")
+results_dir = "../results/cv_results-new_sparseness"
 
 pattern = re.compile(r"(?P<metric>.+)_MCDO-(?P<id>\d+)\.pkl")
 

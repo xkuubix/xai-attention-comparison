@@ -103,7 +103,7 @@ if __name__ == "__main__":
         test_loader = dataloaders['test']
 
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
-        path = "attentions-cv-sep"
+        path = "../results/attentions-cv-mh"
         if not os.path.exists(path):
             print(f"\nCreating attention directory at {path}")
             os.mkdir(path)

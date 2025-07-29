@@ -20,13 +20,13 @@ if __name__ == "__main__":
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
     runs_table_df = project.fetch_runs_table(
-        id=[f"MCDO-{id}" for id in range(522, 523)],
+        id=[f"MCDO-{id}" for id in range(517, 565)],
         owner="jakub-buler",
         state="inactive",
         trashed=False,
         ).to_pandas()
 
-    for _, run in runs_table_df.iterrows():
+    for _, run in runs_table_df.iloc[::-1].iterrows():
         selected_device = run['config/device']
         device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
         SEED = run['config/seed']
@@ -96,16 +96,16 @@ if __name__ == "__main__":
         model.to(device)
         
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
-        folder_path = "cv_results"
+        folder_path = "../results/cv_results-new_sparseness"
         os.makedirs(folder_path, exist_ok=True)
        
         EVALUATIONS = [
             {"name": "sparseness", "fn": evaluate_sparseness},
-            {"name": "avg_sensitivity", "fn": evaluate_avg_sensitivity},
-            {"name": "topkintersection", "fn": evaluate_topk_intersection},
-            {"name": "relevance_rank_accuracy", "fn": evaluate_relevance_rank_accuracy},
-            {"name": "mprt", "fn": evaluate_mprt},
-            {"name": "faithfulness_correlation", "fn": lambda m, d: evaluate_faithfulness_correlation(m, d, use_wrapper=is_single)},
+            # {"name": "topkintersection", "fn": evaluate_topk_intersection},
+            # {"name": "relevance_rank_accuracy", "fn": evaluate_relevance_rank_accuracy},
+            # {"name": "avg_sensitivity", "fn": evaluate_avg_sensitivity},
+            # {"name": "mprt", "fn": evaluate_mprt},
+            # {"name": "faithfulness_correlation", "fn": lambda m, d: evaluate_faithfulness_correlation(m, d, use_wrapper=is_single)},
         ]
 
         for eval_task in EVALUATIONS:

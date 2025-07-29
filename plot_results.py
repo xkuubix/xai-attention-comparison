@@ -9,7 +9,8 @@ import pickle
 from models import GatedAttentionMIL, MultiHeadGatedAttentionMIL
 import torch
 
-results_dir = "results"
+os.chdir("users/project1/pt01190/TOMPEI-CMMD/code")
+results_dir = "../results/results_quant"
 
 pattern = re.compile(r"(?P<metric>.+)_MCDO-(?P<id>\d+)\.pkl")
 
