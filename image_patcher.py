@@ -65,8 +65,8 @@ class ImagePatcher:
         tiles = self.tiles
         c, h, w = image_shape
         
-        reconstructed_image = torch.zeros(c, h, w, dtype=patches[0].dtype, device=patches[0].device)
-        patch_count = torch.zeros(c, h, w, dtype=torch.float, device=patches[0].device)
+        reconstructed_image = torch.zeros(c, h, w, dtype=torch.float, device='cpu')
+        patch_count = torch.zeros(c, h, w, dtype=torch.float, device='cpu')
 
         for item in range(len(instances_ids)):
             h_min, w_min, dh, dw, _, _ = tiles[instances_ids[item]]
