@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import neptune
 import utils
-from models import GatedAttentionMIL, MultiHeadGatedAttentionMIL
+from models import *
 from net_utils import train_gacc, validate, test, mc_test, EarlyStopping
 
 def deactivate_batchnorm(net):
@@ -21,7 +21,8 @@ def deactivate_batchnorm(net):
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
-
+    if os.getcwd().endswith('code') is False:
+        os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
     parser = utils.get_args_parser()
     args, unknown = parser.parse_known_args()
     with open(args.config) as file:
@@ -39,13 +40,13 @@ if __name__ == "__main__":
     torch.use_deterministic_algorithms(True)
     torch.set_default_dtype(torch.float32)
     
+    model_type = config['model_type']
+    tag = f"eci{model_type}_{config['data']['patch_size']}_at_{config['data']['overlap']}"
     run = None
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
         run["config"] = config
         run["sys/group_tags"].add(["cross-validation"])
-        model_type = "SH" if config['training_plan']['criterion'].lower() == 'bce' else "MH"
-        tag = f"{model_type}_{config['data']['patch_size']}_at_{config['data']['overlap']}"
         run["sys/group_tags"].add(tag)
 
 
@@ -76,14 +77,14 @@ if __name__ == "__main__":
         print(val_loader.dataset.df['ClassificationMapped'].value_counts())
         print(test_loader.dataset.df['ClassificationMapped'].value_counts())
         
-        if config['training_plan']['criterion'].lower() == 'bce':
+        if config['model_type'] == "SH":
             model = GatedAttentionMIL(
                 backbone=config['model'],
                 feature_dropout=config['feature_dropout'],
                 attention_dropout=config['attention_dropout'],
                 config=config
                 )
-        elif config['training_plan']['criterion'].lower() == 'ce':
+        elif config['model_type'] == "MH":
             model = MultiHeadGatedAttentionMIL(
                 backbone=config['model'],
                 feature_dropout=config['feature_dropout'],
@@ -91,6 +92,21 @@ if __name__ == "__main__":
                 shared_attention=config['shared_att'],
                 config=config
                 )
+        elif config['model_type'] == "DS":
+            model = DSMIL(
+                 num_classes=1,
+                 backbone=config['model'],
+                 dropout_v=config['feature_dropout'],
+                 config=config
+                 )
+        elif config['model_type'] == "CLAM":
+            model = CLAM(gate=True, size_arg="small", dropout=0.1, k_sample=8, n_classes=2,
+                         instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False, embed_dim=512,
+                         backbone='r18', pretrained=True, output_class=1, config=None)
+        
+        else:
+            raise ValueError("Model type not supported")
+
         if config["neptune"]:
             run['model/architecture'] = str(model.__class__.__name__)
         print(f"Model architecture: {str(model.__class__.__name__)}")
@@ -132,14 +148,15 @@ if __name__ == "__main__":
         torch.save(early_stopping.get_best_model_state(), model_name)
         if run is not None:
             run[f"best_model_path"].log(model_name)
-        if config['training_plan']['criterion'].lower() == 'bce':
+       
+        if config['model_type'] == "SH":
             model = GatedAttentionMIL(
                 backbone=config['model'],
                 feature_dropout=config['feature_dropout'],
                 attention_dropout=config['attention_dropout'],
                 config=config
                 )
-        elif config['training_plan']['criterion'].lower() == 'ce':
+        elif config['model_type'] == "MH":
             model = MultiHeadGatedAttentionMIL(
                 backbone=config['model'],
                 feature_dropout=config['feature_dropout'],
@@ -147,6 +164,20 @@ if __name__ == "__main__":
                 shared_attention=config['shared_att'],
                 config=config
                 )
+        elif config['model_type'] == "DS":
+            model = DSMIL(
+                num_classes=1,
+                backbone=config['model'],
+                dropout_v=config['feature_dropout'],
+                config=config
+                )
+        elif config['model_type'] == "CLAM":
+            model = CLAM(gate=True, size_arg="small", dropout=0.1, k_sample=8, n_classes=2,
+                         instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False, embed_dim=512,
+                         backbone='r18', pretrained=True, output_class=1, config=None)        
+        else:
+            raise ValueError("Model type not supported")
+
         model.apply(deactivate_batchnorm)
         model.load_state_dict(torch.load(model_name))
         model.to(device)
