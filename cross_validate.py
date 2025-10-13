@@ -41,7 +41,8 @@ if __name__ == "__main__":
     torch.set_default_dtype(torch.float32)
     
     model_type = config['model_type']
-    tag = f"eci{model_type}_{config['data']['patch_size']}_at_{config['data']['overlap']}"
+    tag = f"{model_type}_{config['data']['patch_size']}_at_{config['data']['overlap']}"
+    # tag = f"eci{model_type}_{config['data']['patch_size']}_at_{config['data']['overlap']}"
     run = None
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
