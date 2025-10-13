@@ -27,7 +27,7 @@ class ImagePatcher:
             counter += 1
         return points
 
-    def get_tiles(self, h, w):
+    def set_tiles(self, h, w):
         X_points = self._start_points(w, self.patch_size)
         Y_points = self._start_points(h, self.patch_size)
         
@@ -76,9 +76,6 @@ class ImagePatcher:
             patch_count[:, h_min:h_min + dh, w_min:w_min + dw] += 1
 
         patch_count = torch.where(patch_count == 0, torch.ones_like(patch_count), patch_count)
-
-        reconstructed_image /= patch_count
-
         return reconstructed_image
  
 
