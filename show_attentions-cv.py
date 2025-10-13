@@ -6,21 +6,36 @@ if 'code' not in os.getcwd():
     os.chdir('code/')
 import torch    
 import neptune
-from models import GatedAttentionMIL, MultiHeadGatedAttentionMIL
+from models import *
 import utils
 from quantus_utils import *
 from net_utils import deactivate_batchnorm
 import matplotlib.pyplot as plt
+plt.rc('font', family='Nimbus Roman')
+plt.rcParams['font.size'] = 16
 
 
 if __name__ == "__main__":
+    if not os.getcwd().endswith('code'):
+        os.chdir('code')
     logging.basicConfig(level=logging.INFO)
     print("Quantus version:", quantus.__version__)
-
+    parser = utils.get_args_parser()
+    args, unknown = parser.parse_known_args()
+    with open(args.config) as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
+    ranges = [
+        # (552, 558), #mh tompei
+        # (560, 565), #sh tompei
+        # (709, 719), # ds+clam tompei
+        (754, 779), # eci (4x5)
+        ]
+    
     runs_table_df = project.fetch_runs_table(
-        id=[f"MCDO-{id}" for id in range(552, 565)],
+        # id=[f"MCDO-{id}" for id in range(734, 740)],
+        id=[f"MCDO-{i}" for start, end in ranges for i in range(start, end)],
         owner="jakub-buler",
         state="inactive",
         trashed=False,
@@ -45,15 +60,15 @@ if __name__ == "__main__":
             "bag_size": run['config/data/bag_size'],
             "empty_threshold": run['config/data/empty_threshold']},
             }
-        if run['model/architecture'] == 'GatedAttentionMIL':
+        
+        if run['model/architecture'] == "GatedAttentionMIL":
             model = GatedAttentionMIL(
                 backbone=run['config/model'],
                 feature_dropout=run['config/feature_dropout'],
                 attention_dropout=run['config/attention_dropout'],
                 config=model_config
                 )
-            SOFTMAX = False
-        elif run['model/architecture'] == 'MultiHeadGatedAttentionMIL':
+        elif run['model/architecture'] == "MultiHeadGatedAttentionMIL":
             model = MultiHeadGatedAttentionMIL(
                 backbone=run['config/model'],
                 feature_dropout=run['config/feature_dropout'],
@@ -61,7 +76,20 @@ if __name__ == "__main__":
                 shared_attention=run['config/shared_att'],
                 config=model_config
                 )
-            SOFTMAX = True
+        elif run['model/architecture'] == "DSMIL":
+            model = DSMIL(
+                 num_classes=1,
+                 backbone=run['config/model'],
+                 dropout_v=run['config/feature_dropout'],
+                 config=model_config
+                 )
+        elif run['model/architecture'] == "CLAM":
+            model = CLAM(gate=True, size_arg="small", dropout=0.1, k_sample=8, n_classes=2,
+                         instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False, embed_dim=512,
+                         backbone='r18', pretrained=True, output_class=1, config=None)
+        
+        else:
+            raise ValueError("Model type not supported")
 
         print("--"*30)
         print(f"Run ID: {run['sys/id']}")
@@ -73,7 +101,7 @@ if __name__ == "__main__":
 
         data_config = {
             "data": {
-            "metadata_path": run['config/data/metadata_path'],
+            "metadata_path": config['data']['metadata_path'],
             "fraction_train_rest": run['config/data/fraction_train_rest'],
             "fraction_val_test": run['config/data/fraction_val_test'],
             "cv_folds": run['config/data/cv_folds'],
@@ -91,6 +119,9 @@ if __name__ == "__main__":
         model_name = run['best_model_path']
         
         fold = utils.get_fold_number(model_name) - 1
+        if fold != 0:
+            print(f"Skipping fold {fold+1}")
+            continue
         dataloaders = utils.get_fold_dataloaders(data_config, fold)
         test_loader = dataloaders['test']
 
@@ -103,11 +134,13 @@ if __name__ == "__main__":
         test_loader = dataloaders['test']
 
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
-        path = "../results/attentions-cv-mh"
+        # path = "../results-ieee/attentions-cv-plus-tompei-tompei/"
+        # path = "../results-ieee/attentions-cv-plus-tompei-eci/"
+        # path = "../results-ieee/attentions-cv-plus-eci-eci/"
+        path = "../results-ieee/attentions-cv-plus-eci-tompei/"
         if not os.path.exists(path):
             print(f"\nCreating attention directory at {path}")
             os.mkdir(path)
-        # path = "attentions"
 
         if not os.path.exists(f"{path}/{run['sys/id']}"):
             os.mkdir(f"{path}/{run['sys/id']}")
@@ -121,72 +154,54 @@ if __name__ == "__main__":
                 image = batch['image']
                 label = batch['target']['label']
                 mask = batch['target'].get('mask', None)
-                # if label.item() == 0:
-                #     continue
+                if label.item() == 0:
+                    continue
                 model.reconstruct_attention = True
                 model.eval()
                 
-                if 'mcdo' in path:
-                    for module in model.modules():
-                        if isinstance(module, torch.nn.Dropout):
-                            module.p = 0.75
-                            print(f"Setting dropout probability to {module.p} for MC-Dropout inference.")
-                    y, A = model.mc_inference(image, N=500)
+                y, extra = model(image)
+                if model.__class__.__name__ == "DSMIL":
+                    A0 = extra[0].cpu().numpy()
+                    A1 = None
+                elif model.__class__.__name__ == "MultiHeadGatedAttentionMIL":
+                    A0 = extra[0, 0, 0, :, :].cpu().numpy()  # Choose attention map of head 0
+                    A1 = extra[0, 1, 0, :, :].cpu().numpy()  # Choose attention map of head 1
                 else:
-                    y, A = model(image)
-                # print(A.shape) torch.Size([1, 2, 1, 2294, 1914])
-                if model.__class__.__name__ == 'MultiHeadGatedAttentionMIL':
-                    if 'mcdo' in path:
-                        # y shape: [N, 1, 2] — N = MC samples
-                        y_activated = torch.softmax(y, dim=2)
-                        y_avg = y_activated.mean(dim=0).squeeze(0)  # Average MC samples → shape: [2]
-                    else:
-                        y_avg = torch.softmax(y, dim=1).squeeze(0)  # shape: [2]
-                    
-                    pos_prob = y_avg[1].item()  # Class 1 probability
-                    # A = A.mean(dim=0, keepdim=True)  # [N, ..., H, W] → average attention maps over MC samples
-                    A = A[0, 1, 0, :, :].cpu().numpy()  # Choose attention map of head 1
-
-                elif model.__class__.__name__ == 'GatedAttentionMIL':
-                    if 'mcdo' in path:
-                        # y shape: [N, 1, 1, 1]
-                        y_activated = torch.sigmoid(y)  # Apply sigmoid to each MC sample
-                        y_avg = y_activated.mean(dim=0).squeeze()  # Average over N, squeeze → scalar
-                    else:
-                        y_avg = torch.sigmoid(y).squeeze()
-
-                    pos_prob = y_avg.item()
-                    # A = A.mean(dim=0, keepdim=True)  # Average MC attention maps
-                    A = A[0, 0, 0, :, :].cpu().numpy()
-
+                    A0 = extra.cpu().numpy()
+                    A1 = None
+              
                 # === Original Image ===
                 fig1, ax1 = plt.subplots(figsize=(6, 6))
                 ax1.imshow(image[0, :, :, :].permute(1, 2, 0).cpu().numpy())
-                ax1.set_title("Original Image")
                 ax1.axis('off')
                 fig1.tight_layout()
                 fig1.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_original.png", dpi=300)
-                fig1.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_original.pdf", format='pdf')
+                # fig.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_original.pdf", format='pdf')
                 plt.close(fig1)
 
+                # === Mask (if available) ===
+                fig3, ax3 = plt.subplots(figsize=(6, 6))
+                ax3.imshow(mask[0, :, :].cpu().numpy(), alpha=0.5, cmap='gray')
+                ax3.axis('off')
+                fig3.tight_layout()
+                fig3.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_mask.png", dpi=300)
+                # fig.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_mask.pdf", format='pdf')
+                plt.close(fig3)
+
                 # === Attention Map ===
-                print(f"Attention shape: {A.shape}")
+                print(f"Attention shape: {A0.shape}")
                 fig2, ax2 = plt.subplots(figsize=(6, 6))
-                ax2.imshow(A, cmap='jet')
-                ax2.set_title("Attention Map")
+                ax2.imshow(A0.squeeze(), cmap='jet')
                 ax2.axis('off')
                 fig2.tight_layout()
-                fig2.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention.png", dpi=300)
-                fig2.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention.pdf", format='pdf')
+                fig2.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention0.png", dpi=300)
+                # fig2.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention.pdf", format='pdf')
                 plt.close(fig2)
 
-                # === Mask (if available) ===
-                if mask is not None:
-                    fig3, ax3 = plt.subplots(figsize=(6, 6))
-                    ax3.imshow(mask[0, :, :].cpu().numpy(), alpha=0.5, cmap='gray')
-                    ax3.set_title("Mask")
-                    ax3.axis('off')
-                    fig3.tight_layout()
-                    fig3.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_mask.png", dpi=300)
-                    fig3.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_mask.pdf", format='pdf')
-                    plt.close(fig3)
+                if A1 is not None:
+                    fig4, ax4 = plt.subplots(figsize=(6, 6))
+                    ax4.imshow(A1.squeeze(), cmap='jet')
+                    ax4.axis('off')
+                    fig4.tight_layout()
+                    fig4.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention1.png", dpi=300)
+                    plt.close(fig4)
