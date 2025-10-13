@@ -22,6 +22,11 @@ class PredictorWrapper(nn.Module):
         output = self.model(x)
         if isinstance(output, tuple):
             logits = output[0]
+            if isinstance(logits, tuple):
+                if self.model.__class__.__name__ == "DSMIL":
+                    logits = logits[1]
+                elif self.model.__class__.__name__ == "CLAM":
+                    logits = logits[0]
         else:
             logits = output
 
@@ -61,8 +66,16 @@ class PredictorWrapperToSoftmax(nn.Module):
     
     @staticmethod
     def binary_to_softmax(probs):
-        probs = probs.item() if probs.ndim == 0 else probs.squeeze(-1)
-        probs = torch.stack([1 - probs, probs], dim=1)  # convert to 2-class softmax equivalent
+        # probs = probs.item() if probs.ndim == 0 else probs.squeeze(-1)
+        # probs = torch.stack([1 - probs, probs], dim=1)  # convert to 2-class softmax equivalent
+        # return probs
+        if isinstance(probs, np.ndarray):
+            probs = torch.from_numpy(probs)
+        if not torch.is_tensor(probs):
+            probs = torch.tensor(probs)
+        probs = probs.float()
+        probs = probs.view(-1)
+        probs = torch.stack([1 - probs, probs], dim=1)
         return probs
     
     def forward(self, x):
@@ -70,6 +83,11 @@ class PredictorWrapperToSoftmax(nn.Module):
 
         if isinstance(output, tuple):
             logits = output[0]
+            if isinstance(logits, tuple):
+                if self.model.__class__.__name__ == "DSMIL":
+                    logits = logits[1]
+                elif self.model.__class__.__name__ == "CLAM":
+                    logits = logits[0]
         else:
             logits = output
 
@@ -91,8 +109,10 @@ def explain_func(inputs: np.ndarray,
     with torch.no_grad():
         _, attention_map = wrapper.forward_original(inputs)
     wrapper.reconstruct_attention = False
-    if wrapper.model.__class__.__name__ == "MultiHeadGatedAttentionMIL":
-        attention_map = attention_map[:, 1, :, :, :]  # Select positive head
+    if wrapper.model.__class__.__name__ == "DSMIL":
+        attention_map = attention_map[0]
+    elif wrapper.model.__class__.__name__ == "MultiHeadGatedAttentionMIL":
+        attention_map = attention_map[:, 0, :, :, :]  # Select positive head
     return attention_map.squeeze(0).cpu().numpy()
 
 def evaluate_selectivity(model, test_loader, use_wrapper):
@@ -151,7 +171,15 @@ def evaluate_mprt(model, test_loader):
 def evaluate_avg_sensitivity(model, test_loader):
     return evaluate_metric_by_class(
         model, test_loader,
-        metric=quantus.AvgSensitivity(nr_samples=10),
+        metric=quantus.AvgSensitivity(nr_samples=100,),
+        explain_func=explain_func,
+    )
+
+def evaluate_road(model, test_loader, use_wrapper):
+    return evaluate_metric_by_class(
+        model, test_loader,
+        metric=quantus.ROAD(percentages=list(range(3, 31, 3))),
+        use_wrapper=use_wrapper,
         explain_func=explain_func,
     )
 
@@ -171,7 +199,7 @@ def evaluate_metric_by_class(
     print(wrapped_model.__class__.__name__)
     wrapped_model.eval()
 
-    positive_scores, negative_scores = [], []
+    results = []
 
     skipped_count = 0
     for batch in test_loader:
@@ -195,18 +223,23 @@ def evaluate_metric_by_class(
             kwargs['explain_func'] = explain_func
             kwargs['softmax'] = False
 
-        output = wrapped_model(image)
-        scores = metric(**kwargs)
-        print(f"Scores: {scores}")
+        with torch.no_grad():
+            # compute metric
+            scores = metric(**kwargs)
 
-        if label.item() == 1:
-            # positive_scores.extend(scores)
-            positive_scores.append(scores)
-        else:
-            # negative_scores.extend(scores)
-            negative_scores.append(scores)
+            # compute predictions for record
+            probs = wrapped_model(image)          # shape: (B, C)
+            preds = probs.argmax(dim=1)           # shape: (B,)
+            pred_val = int(preds[0].item())       # assumes batch size = 1
+
+            # store record
+            record = {
+                "scores": scores,
+                "label": label.item(),
+                "pred": pred_val,
+            }
+            results.append(record)
+        print(f"Scores: {record['scores']}, Label: {record['label']}, Pred: {record['pred']}")
+
     print(f"Skipped {skipped_count} samples with label {skip_label}.")
-    return {
-        "positive": positive_scores,
-        "negative": negative_scores,
-    }
+    return results
