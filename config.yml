@@ -2,8 +2,10 @@ neptune: True
 seed: 42
 device: 'cuda'
 
-model_path: '/users/scratch1/jbuler/models-xai-eval'
+# model_path: '/users/scratch1/jbuler/models-xai-eval-plus'
+model_path: '/users/scratch1/jbuler/models-xai-eval-plus-eci-gum'
 model: "r18"
+model_type: "CLAM" # "CLAM" "SH" "MH" "DS"
 shared_att: False
 
 is_MCDO-val: False
@@ -17,6 +19,7 @@ data:
   fraction_val_test: 0.5
   root_path: '/users/project1/pt01190/TOMPEI-CMMD'
   metadata_path: '/users/project1/pt01190/TOMPEI-CMMD/df_with_masks.pkl'
+  # metadata_path: '/users/project1/pt01190/TOMPEI-CMMD/eci_format_tompei.pkl'
   
   patch_size: 128
   overlap: .75
@@ -36,7 +39,7 @@ training_plan:
     patience: 20
     grad_acc_steps: 2
 
-  criterion: 'bce'
+  criterion: 'ce'
   optimizer: 'sgd'
 
   scheduler:
