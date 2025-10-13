@@ -1,11 +1,13 @@
 # %%
+import sys
+sys.path.append('/users/project1/pt01190/TOMPEI-CMMD/code')
 import quantus
 import yaml, logging
 import os, random, numpy as np
 import torch    
 import torch.nn as nn
 import neptune
-from models import GatedAttentionMIL, MultiHeadGatedAttentionMIL
+from models import *
 import utils
 from quantus_utils import *
 from net_utils import deactivate_batchnorm, test, mc_test
@@ -14,6 +16,10 @@ import pickle
 
 
 if __name__ == "__main__":
+    parser = utils.get_args_parser()
+    args, unknown = parser.parse_known_args()
+    with open(args.config) as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
     logging.basicConfig(level=logging.INFO)
     print("Quantus version:", quantus.__version__)
 
@@ -41,7 +47,8 @@ if __name__ == "__main__":
             "bag_size": run['config/data/bag_size'],
             "empty_threshold": run['config/data/empty_threshold']},
             }
-        if run['model/architecture'] == 'GatedAttentionMIL':
+
+        if run['model/architecture'] == "GatedAttentionMIL":
             model = GatedAttentionMIL(
                 backbone=run['config/model'],
                 feature_dropout=run['config/feature_dropout'],
@@ -49,7 +56,8 @@ if __name__ == "__main__":
                 config=model_config
                 )
             is_single = True
-        elif run['model/architecture'] == 'MultiHeadGatedAttentionMIL':
+
+        elif run['model/architecture'] == "MultiHeadGatedAttentionMIL":
             model = MultiHeadGatedAttentionMIL(
                 backbone=run['config/model'],
                 feature_dropout=run['config/feature_dropout'],
@@ -58,6 +66,24 @@ if __name__ == "__main__":
                 config=model_config
                 )
             is_single = False
+
+        elif run['model/architecture'] == "DSMIL":
+            model = DSMIL(
+                num_classes=1,
+                backbone=run['config/model'],
+                dropout_v=run['config/feature_dropout'],
+                config=model_config
+                )
+            is_single = True
+
+        elif run['model/architecture'] == "CLAM":
+            model = CLAM(gate=True, size_arg="small", dropout=0.1, k_sample=8, n_classes=2,
+                         instance_loss_fn=nn.CrossEntropyLoss(), subtyping=False, embed_dim=512,
+                         backbone='r18', pretrained=True, output_class=1, config=None)        
+            is_single = False
+
+        else:
+            raise ValueError("Model type not supported")
 
         print("--"*30)
         print(f"Run ID: {run['sys/id']}")
@@ -68,7 +94,7 @@ if __name__ == "__main__":
 
         data_config = {
             "data": {
-            "metadata_path": run['config/data/metadata_path'],
+            "metadata_path": config['data']['metadata_path'],
             "fraction_train_rest": run['config/data/fraction_train_rest'],
             "fraction_val_test": run['config/data/fraction_val_test'],
             "cv_folds": run['config/data/cv_folds'],
@@ -96,13 +122,21 @@ if __name__ == "__main__":
         model.to(device)
         
         os.chdir('/users/project1/pt01190/TOMPEI-CMMD/code')
-        folder_path = "../results/cv_results-new_sparseness"
+        # folder_path = "../results-ieee/cv_results-plus-tompei-tompei"
+        # folder_path = "../results-ieee/cv_results-plus-tompei-eci"
+        # folder_path = "../results-ieee/cv_results-plus-eci-eci"
+        # folder_path = "../results-ieee/cv_results-plus-eci-tompei"
+        # folder_path = "../results-ieee/cv_results-plus-tompei-tompei-mh-neg"
+        # folder_path = "../results-ieee/cv_results-plus-tompei-eci-mh-neg"
+        # folder_path = "../results-ieee/cv_results-plus-eci-eci-mh-neg"
+        folder_path = "../results-ieee/cv_results-plus-eci-tompei-mh-neg"
         os.makedirs(folder_path, exist_ok=True)
        
         EVALUATIONS = [
             {"name": "sparseness", "fn": evaluate_sparseness},
             # {"name": "topkintersection", "fn": evaluate_topk_intersection},
-            # {"name": "relevance_rank_accuracy", "fn": evaluate_relevance_rank_accuracy},
+            {"name": "relevance_rank_accuracy", "fn": evaluate_relevance_rank_accuracy},
+            # {"name": "road", "fn": lambda m, d: evaluate_road(m, d, use_wrapper=is_single)},
             # {"name": "avg_sensitivity", "fn": evaluate_avg_sensitivity},
             # {"name": "mprt", "fn": evaluate_mprt},
             # {"name": "faithfulness_correlation", "fn": lambda m, d: evaluate_faithfulness_correlation(m, d, use_wrapper=is_single)},
