@@ -117,12 +117,38 @@ if __name__ == "__main__":
                 #     continue
                 model.reconstruct_attention = True
                 model.eval()
-                y, A = model(image)
                 
+                if 'mcdo' in path:
+                    for module in model.modules():
+                        if isinstance(module, torch.nn.Dropout):
+                            module.p = 0.75
+                            print(f"Setting dropout probability to {module.p} for MC-Dropout inference.")
+                    y, A = model.mc_inference(image, N=500)
+                else:
+                    y, A = model(image)
+                # print(A.shape) torch.Size([1, 2, 1, 2294, 1914])
                 if model.__class__.__name__ == 'MultiHeadGatedAttentionMIL':
-                    print(A.shape)
-                    A = A[0, 1, 0, :, :].cpu().numpy()
+                    if 'mcdo' in path:
+                        # y shape: [N, 1, 2] — N = MC samples
+                        y_activated = torch.softmax(y, dim=2)
+                        y_avg = y_activated.mean(dim=0).squeeze(0)  # Average MC samples → shape: [2]
+                    else:
+                        y_avg = torch.softmax(y, dim=1).squeeze(0)  # shape: [2]
+                    
+                    pos_prob = y_avg[1].item()  # Class 1 probability
+                    # A = A.mean(dim=0, keepdim=True)  # [N, ..., H, W] → average attention maps over MC samples
+                    A = A[0, 1, 0, :, :].cpu().numpy()  # Choose attention map of head 1
+
                 elif model.__class__.__name__ == 'GatedAttentionMIL':
+                    if 'mcdo' in path:
+                        # y shape: [N, 1, 1, 1]
+                        y_activated = torch.sigmoid(y)  # Apply sigmoid to each MC sample
+                        y_avg = y_activated.mean(dim=0).squeeze()  # Average over N, squeeze → scalar
+                    else:
+                        y_avg = torch.sigmoid(y).squeeze()
+
+                    pos_prob = y_avg.item()
+                    # A = A.mean(dim=0, keepdim=True)  # Average MC attention maps
                     A = A[0, 0, 0, :, :].cpu().numpy()
 
                 fig, axes = plt.subplots(1, 3, figsize=(16, 6))
@@ -146,13 +172,13 @@ if __name__ == "__main__":
 
                 label_str = 'Negative' if label.item() == 0 else 'Positive'
 
-                pos_prob = torch.softmax(y, dim=1)[0, 1].item() if SOFTMAX else torch.sigmoid(y).item()
+                # pos_prob = torch.softmax(y, dim=1)[0, 1].item() if SOFTMAX else torch.sigmoid(y).item()
 
                 plt.suptitle(f"ID: {batch['metadata']['ID'][0]}    |   Ground Truth Label: {label_str}    |    Positive Prob.: {pos_prob:.2f}",
                              fontsize=16)
                 plt.tight_layout()
                 plt.show()
-                plt.savefig(f"attentions/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention.png")
+                plt.savefig(f"{path}/{run['sys/id']}/{batch['metadata']['ID'][0]}_attention.png")
                 plt.close(fig)
 
 
