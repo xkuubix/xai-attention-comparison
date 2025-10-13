@@ -10,33 +10,6 @@ def deactivate_batchnorm(model):
         model.running_mean = None
         model.running_var = None
 
-def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
-    model.train()
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    for batch in dataloader:
-        images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-        for param in model.parameters():
-            param.grad = None
-        outputs, _ = model(images)
-        output = torch.sigmoid(outputs.squeeze(0))
-        loss = criterion(output, targets.unsqueeze(0))
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item()
-        preds = (output.view(-1) > 0.5).float()
-        correct += (preds == targets).sum().item()
-        total += targets.size(0)
-    epoch_loss = running_loss / len(dataloader)
-    epoch_acc = correct / total
-    
-    if neptune_run is not None:
-        neptune_run["train/epoch_loss"].log(epoch_loss)
-        neptune_run["train/epoch_acc"].log(epoch_acc)
-    print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
-
-
 def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run=None, epoch=100, accumulation_steps=8, fold_idx=None):
     model.train()
     running_loss = 0.0
@@ -46,12 +19,33 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run=None
     optimizer.zero_grad()
 
     for batch_idx, batch in enumerate(dataloader):
-        images, targets = batch['image'], batch['target']['label'].to(device)
-        output, _ = model(images)
+        images, targets = batch['image'].to(device), batch['target']['label'].to(device)
+        
+        if str(model.__class__.__name__) == "CLAM":
+            output, _ = model(images, targets, instance_eval=True)
+        else:
+            output, _ = model(images)
+        
         if str(model.__class__.__name__) == "GatedAttentionMIL":
-            output = torch.sigmoid(output[0].squeeze(0))
-        loss = criterion(output, targets)
-       
+            output = torch.sigmoid(output[0])
+        
+        if str(model.__class__.__name__) == "DSMIL":
+            classes, bag_prediction = output
+            max_prediction, index = torch.max(classes, 0)
+            output = torch.sigmoid(bag_prediction)
+            loss_bag = criterion(output, targets.view(1, -1))
+            loss_max = criterion(torch.sigmoid(max_prediction.view(1, -1)), targets.view(1, -1))
+            loss_total = 0.5*loss_bag + 0.5*loss_max
+            loss = loss_total.mean()
+        elif "GatedAttentionMIL" in str(model.__class__.__name__):
+            loss = criterion(output, targets)
+        elif str(model.__class__.__name__) == "CLAM":
+            loss = criterion(output[1], targets)
+            c1 = 0.7
+            c2 = 1 - c1
+            loss = loss * c1 + output[-1]['instance_loss'] * c2 
+            output = output[1]
+
         running_loss += loss.item()
         
         loss = loss / accumulation_steps
@@ -62,10 +56,11 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run=None
             optimizer.step()
             optimizer.zero_grad()
 
-        if str(model.__class__.__name__) == "GatedAttentionMIL":
+        if str(model.__class__.__name__) in ["GatedAttentionMIL", "DSMIL"]:
             preds = (output.view(-1) > 0.5).float()
-        elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL":
+        elif str(model.__class__.__name__) in ["MultiHeadGatedAttentionMIL", "CLAM"]:
             preds = output.argmax(dim=1)
+            
         correct += (preds == targets).sum().item()
         total += targets.size(0)
 
@@ -93,15 +88,39 @@ def validate(model, dataloader, criterion, device, neptune_run=None, epoch=100, 
     with torch.no_grad():
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-            output, _ = model(images)
+            
+            if str(model.__class__.__name__) == "CLAM":
+                output, _ = model(images, targets, instance_eval=True)
+            else:
+                output, _ = model(images)
             if str(model.__class__.__name__) == "GatedAttentionMIL":
-                output = torch.sigmoid(output[0].squeeze(0))
-            loss = criterion(output, targets)
+                output = torch.sigmoid(output[0])
+    
+            if str(model.__class__.__name__) == "DSMIL":
+                classes, bag_prediction = output
+                max_prediction, index = torch.max(classes, 0)
+                output = torch.sigmoid(bag_prediction)
+                loss_bag = criterion(output, targets.view(1, -1))
+                loss_max = criterion(torch.sigmoid(max_prediction.view(1, -1)), targets.view(1, -1))
+                loss_total = 0.5*loss_bag + 0.5*loss_max
+                loss = loss_total.mean()
+            elif "GatedAttentionMIL" in str(model.__class__.__name__):
+                loss = criterion(output, targets)
+            elif str(model.__class__.__name__) == "CLAM":
+                loss = criterion(output[1], targets)
+                c1 = 0.7
+                c2 = 1 - c1
+                loss = loss * c1 + output[-1]['instance_loss'] * c2
+                output = output[1]
+
+            
             running_loss += loss.item()
-            if str(model.__class__.__name__) == "GatedAttentionMIL":
+
+            if str(model.__class__.__name__) in ["GatedAttentionMIL", "DSMIL"]:
                 preds = (output.view(-1) > 0.5).float()
-            elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL":
+            elif str(model.__class__.__name__) in ["MultiHeadGatedAttentionMIL", "CLAM"]:
                 preds = output.argmax(dim=1)
+            
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             
@@ -130,12 +149,23 @@ def test(model, dataloader, device, neptune_run=None, fold_idx=None):
     with torch.no_grad():
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-            output, _ = model(images)
-            if str(model.__class__.__name__) == "GatedAttentionMIL":
-                output = torch.sigmoid(output[0].squeeze(0))
+            if str(model.__class__.__name__) == "CLAM":
+                output, _ = model(images, targets)
+            else:
+                output, _ = model(images)
+            
+            if str(model.__class__.__name__) == "DSMIL":
+                output = torch.sigmoid(output[1])
+            elif str(model.__class__.__name__) == "CLAM":
+                output = output[1]
+            elif str(model.__class__.__name__) == "GatedAttentionMIL":
+                output = torch.sigmoid(output[0])
+            
+            if str(model.__class__.__name__) in ["GatedAttentionMIL", "DSMIL"]:
                 preds = (output.view(-1) > 0.5).float()
-            elif str(model.__class__.__name__) == "MultiHeadGatedAttentionMIL":
+            elif str(model.__class__.__name__) in ["MultiHeadGatedAttentionMIL", "CLAM"]:
                 preds = output.argmax(dim=1)
+            
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             all_preds.extend(preds.cpu().numpy())
