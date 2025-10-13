@@ -54,6 +54,7 @@ def random_split_df(df: DataFrame,
     val_ids = unique_ids[n_train:n_train + n_val]
     test_ids = unique_ids[n_train + n_val:]
 
+    print(f"Test IDs: {test_ids}")
     train = df[df['ID'].isin(train_ids)]
     val = df[df['ID'].isin(val_ids)]
     test = df[df['ID'].isin(test_ids)]
